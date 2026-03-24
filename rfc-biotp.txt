@@ -1,0 +1,1062 @@
+
+
+
+
+
+Internet-Draft                                              P. Sippl
+Intended status: Experimental                            Independent
+Expires: September 24, 2026                            March 24, 2026
+
+
+      BIOTP: Biometric One-Time Passwords with Secure Enclave
+                   Bound Elliptic Curve Key Agreement
+
+Abstract
+
+   This document specifies BIOTP, a one-time password protocol that
+   binds OTP generation to a biometrically-gated private key held in
+   a hardware secure element.  BIOTP extends the Time-Based One-Time
+   Password (TOTP) algorithm [RFC6238] by replacing the static
+   symmetric shared secret with a per-time-step shared secret derived
+   from Elliptic Curve Diffie-Hellman (ECDH) key agreement over the
+   NIST P-256 curve.
+
+   The device generates a P-256 key pair inside a secure enclave and
+   gates all key-agreement operations on biometric user presence
+   (e.g., fingerprint or face recognition).  The server holds a
+   master P-256 key pair and derives a fresh child private key for
+   each 30-second time step.  The device independently derives the
+   matching child public key from the server's master public key.
+   Both sides arrive at the same shared secret via ECDH and use it
+   as the HOTP key for that time step.
+
+   The result is a 6-digit OTP that is:
+
+   (a) physically bound to a specific device's secure hardware,
+   (b) unlockable only by the enrolled biometric,
+   (c) generated entirely offline after a one-time registration, and
+   (d) verifiable by the server without storing any per-user secrets.
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.
+
+   Internet-Drafts are draft documents valid for a maximum of six
+   months and may be updated, replaced, or obsoleted by other
+   documents at any time.  It is inappropriate to use Internet-Drafts
+   as reference material or to cite them other than as "work in
+   progress."
+
+   This Internet-Draft will expire on September 24, 2026.
+
+Copyright Notice
+
+   Copyright (c) 2026 IETF Trust and the persons identified as the
+   document authors.  All rights reserved.
+
+Table of Contents
+
+   1.  Introduction  . . . . . . . . . . . . . . . . . . . . . .   2
+   2.  Conventions Used in This Document . . . . . . . . . . . .   4
+   3.  Notation  . . . . . . . . . . . . . . . . . . . . . . . .   4
+   4.  Threat Model  . . . . . . . . . . . . . . . . . . . . . .   5
+   5.  Protocol Overview . . . . . . . . . . . . . . . . . . . .   6
+   6.  Device Key Requirements . . . . . . . . . . . . . . . . .   7
+     6.1.  Secure Element Properties . . . . . . . . . . . . . .   7
+     6.2.  Biometric Gating  . . . . . . . . . . . . . . . . . .   8
+     6.3.  Key Lifecycle . . . . . . . . . . . . . . . . . . . .   8
+   7.  Server Master Key . . . . . . . . . . . . . . . . . . . .   9
+   8.  Registration  . . . . . . . . . . . . . . . . . . . . . .   9
+     8.1.  Registration Payload  . . . . . . . . . . . . . . . .  10
+     8.2.  Device Enrollment . . . . . . . . . . . . . . . . . .  10
+     8.3.  Device Attestation  . . . . . . . . . . . . . . . . .  11
+       8.3.1.  Apple App Attest (iOS)  . . . . . . . . . . . . .  11
+       8.3.2.  Android Key Attestation . . . . . . . . . . . . .  12
+     8.4.  Server Completion . . . . . . . . . . . . . . . . . .  13
+   9.  Child Key Derivation  . . . . . . . . . . . . . . . . . .  12
+     9.1.  Tweak Computation . . . . . . . . . . . . . . . . . .  12
+     9.2.  Server-Side Child Private Key . . . . . . . . . . . .  12
+     9.3.  Client-Side Child Public Key  . . . . . . . . . . . .  13
+   10. OTP Generation  . . . . . . . . . . . . . . . . . . . . .  13
+     10.1. Biometric Unlock  . . . . . . . . . . . . . . . . . .  13
+     10.2. Shared Secret Derivation  . . . . . . . . . . . . . .  14
+     10.3. HOTP Computation  . . . . . . . . . . . . . . . . . .  14
+   11. OTP Verification  . . . . . . . . . . . . . . . . . . . .  15
+   12. Algorithm Parameters  . . . . . . . . . . . . . . . . . .  15
+   13. Security Considerations . . . . . . . . . . . . . . . . .  16
+     13.1. Biometric Binding . . . . . . . . . . . . . . . . . .  16
+     13.2. Comparison with TOTP  . . . . . . . . . . . . . . . .  17
+     13.3. Master Key Compromise . . . . . . . . . . . . . . . .  17
+     13.4. Device Compromise . . . . . . . . . . . . . . . . . .  18
+     13.5. Replay Protection . . . . . . . . . . . . . . . . . .  18
+     13.6. Phishing Resistance . . . . . . . . . . . . . . . . .  18
+     13.7. Tweak Derivation  . . . . . . . . . . . . . . . . . .  19
+     13.8. Curve Choice  . . . . . . . . . . . . . . . . . . . .  19
+   14. Test Vectors  . . . . . . . . . . . . . . . . . . . . . .  19
+   15. IANA Considerations . . . . . . . . . . . . . . . . . . .  20
+   16. References  . . . . . . . . . . . . . . . . . . . . . . .  20
+     16.1. Normative References  . . . . . . . . . . . . . . . .  20
+     16.2. Informative References  . . . . . . . . . . . . . . .  21
+   Appendix A.  Comparison with TOTP and FIDO2 . . . . . . . . .  22
+   Appendix B.  Platform Mapping . . . . . . . . . . . . . . . .  23
+   Appendix C.  Reference Implementation . . . . . . . . . . . .  23
+   Author's Address  . . . . . . . . . . . . . . . . . . . . . .  24
+
+
+1.  Introduction
+
+   Two-factor authentication commonly relies on one-time passwords.
+   The TOTP algorithm [RFC6238] is the dominant standard, implemented
+   in authenticator apps on billions of devices.  TOTP has two
+   structural weaknesses:
+
+   (a) The shared secret K is symmetric.  Both the server and the
+       authenticator app hold identical copies.  A server-side breach
+       exposes every enrolled user's OTP generator immediately.
+
+   (b) The shared secret K is a pure data value.  It can be
+       photographed from a QR code, exported from a backup, copy-
+       pasted between devices, or extracted by malware with file
+       system access.  There is no cryptographic binding between K
+       and the physical device that holds it.
+
+   FIDO2/WebAuthn solves both problems with public-key cryptography
+   and hardware-bound credentials, but it produces a cryptographic
+   assertion -- not a short numeric code.  Many deployment scenarios
+   still require a human-transferable OTP: call-center verification,
+   air-gapped terminals, legacy systems, and contexts where the
+   verifier cannot run a WebAuthn ceremony.
+
+   This document specifies BIOTP (Biometric One-Time Password), a
+   protocol that combines the deployment simplicity of a 6-digit
+   OTP with the security properties of hardware-bound, biometric-
+   gated public-key cryptography.
+
+   The core idea has two parts:
+
+   1. Replace the symmetric TOTP secret with an ECDH key agreement.
+      The server stores only user public keys.  The per-time-step
+      shared secret is computed on the fly from a rotating child
+      key derived via an additive tweak on the server's master key.
+
+   2. Require the device private key to reside in a secure enclave
+      (or equivalent hardware-backed keystore) and gate every key-
+      agreement operation on biometric user presence.
+
+   The combination yields the following properties:
+
+   - No per-user secrets on the server.  A database breach exposes
+     only public keys.
+
+   - Device binding.  The private key is non-extractable from the
+     secure element.  Copying the authenticator to another device
+     is not possible without hardware compromise.
+
+   - Biometric liveness.  Every OTP generation requires the
+     enrolled user to physically authenticate (face, fingerprint,
+     or iris).  Malware running on the device cannot silently
+     generate OTPs.
+
+   - Offline generation.  After registration, the device needs no
+     network connectivity to produce OTPs.
+
+   - Standard OTP output.  The final value is a 6-digit HOTP code,
+     compatible with existing input fields and user expectations.
+
+   BIOTP does not define a transport protocol, provisioning format,
+   or device attestation scheme.  It specifies the cryptographic
+   operations, the device key requirements, and the biometric
+   gating constraints.  Section 8 provides an informational
+   registration flow.  Appendix B maps the abstract requirements
+   to concrete platform APIs.
+
+
+2.  Conventions Used in This Document
+
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL
+   NOT", "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED",
+   "MAY", and "OPTIONAL" in this document are to be interpreted as
+   described in BCP 14 [RFC2119] [RFC8174] when, and only when,
+   they appear in all capitals, as shown here.
+
+
+3.  Notation
+
+   P-256    The NIST P-256 elliptic curve (secp256r1) [FIPS186].
+
+   n        The order of the P-256 base point G.
+            n = 0xFFFFFFFF00000000FFFFFFFFFFFFFFFF
+                BCE6FAADA7179E84F3B9CAC2FC632551
+
+   G        The base point (generator) of P-256.
+
+   d_S      Server master private scalar, in [1, n-1].
+
+   Q_S      Server master public key, Q_S = d_S * G.
+            Encoded as raw X || Y (64 octets).
+
+   d_U      Device private scalar, in [1, n-1].
+            Held exclusively inside the secure element.
+
+   Q_U      Device public key, Q_U = d_U * G.
+
+   T        Time step counter, T = floor(unix_time / X).
+
+   X        Time step period in seconds (default: 30).
+
+   HMAC     HMAC [RFC2104].
+
+   SHA-256  SHA-256 [FIPS180].
+
+   ECDH     Elliptic Curve Diffie-Hellman [SEC1] Section 3.3.1.
+
+   ||       Octet string concatenation.
+
+   BE64(x)  8-octet big-endian encoding of integer x.
+
+
+4.  Threat Model
+
+   BIOTP is designed to resist the following threats:
+
+   T1. Server database breach.
+       An attacker obtains the full user table.  In TOTP, this
+       yields every user's K.  In BIOTP, the attacker obtains only
+       public keys Q_U, which are useless without the corresponding
+       device private keys.
+
+   T2. Authenticator cloning.
+       An attacker with temporary physical or remote access to the
+       user's device attempts to copy the OTP generator to another
+       device.  In TOTP, the attacker extracts K from the file
+       system or backup.  In BIOTP, d_U is non-extractable from
+       the secure element.
+
+   T3. Silent OTP generation by malware.
+       Malware running on the device attempts to generate OTPs
+       without the user's knowledge.  In TOTP, malware reads K
+       from storage and generates codes freely.  In BIOTP, every
+       ECDH operation requires biometric authentication enforced
+       by the secure element hardware; malware cannot bypass this
+       without a secure element exploit.
+
+   T4. Shoulder surfing / OTP interception.
+       An attacker observes a single OTP in transit.  The OTP is
+       valid for at most one 30-second window (with replay
+       protection).  This threat is equivalent in TOTP and BIOTP.
+
+   T5. Server master key compromise.
+       An attacker obtains d_S.  Combined with any Q_U from the
+       user database, the attacker can compute shared secrets and
+       generate OTPs.  This is the primary residual risk and is
+       discussed in Section 13.3.
+
+   BIOTP does NOT resist:
+
+   - An attacker who controls the device hardware (secure element
+     bypass).
+   - An attacker who compromises d_S AND has access to the user
+     database.
+   - Real-time man-in-the-middle phishing that relays the OTP
+     within its validity window (see Section 13.6).
+
+
+5.  Protocol Overview
+
+   BIOTP operates in three phases:
+
+   Phase 1: Registration (one-time, online)
+
+      The server communicates its master public key Q_S to the
+      device through an authenticated channel (e.g., a QR code
+      over TLS).  The device generates a biometric-gated P-256
+      key pair (d_U, Q_U) in its secure element and registers
+      Q_U with the server.  Optionally, the device provides a
+      hardware attestation proving that d_U is held in a genuine
+      secure element.
+
+   Phase 2: OTP Generation (device-side, offline, biometric-gated)
+
+      The user initiates OTP generation.  The device:
+      1. Prompts for biometric authentication.
+      2. Derives the child public key for the current time step:
+         Q_child = Q_S + tweak * G.
+      3. Performs ECDH between d_U (unlocked by biometric) and
+         Q_child.
+      4. Derives the shared secret via X9.63 KDF.
+      5. Computes a 6-digit HOTP code.
+
+   Phase 3: OTP Verification (server-side)
+
+      The server:
+      1. Derives the child private key for the current time step:
+         d_child = (d_S + tweak) mod n.
+      2. Performs ECDH between d_child and the user's Q_U.
+      3. Derives the same shared secret.
+      4. Recomputes the HOTP code and compares.
+
+
+6.  Device Key Requirements
+
+   The device key is the security anchor of BIOTP.  Unlike TOTP,
+   where K is a data value that can be copied, the BIOTP device
+   key MUST be bound to hardware and gated on biometric presence.
+
+6.1.  Secure Element Properties
+
+   The device private key d_U MUST be generated and stored in a
+   hardware-backed secure element with the following properties:
+
+   SE1. Non-extractability.  There MUST be no API, debug
+        interface, or backup mechanism through which d_U can be
+        read out of the secure element in plaintext.
+
+   SE2. On-chip key agreement.  The ECDH computation MUST be
+        performed inside the secure element.  The raw private
+        scalar MUST NOT be exposed to the application processor,
+        even transiently.
+
+   SE3. Per-operation access control.  Each invocation of the
+        key-agreement operation MUST be individually authorized
+        by the access policy defined at key creation time (see
+        Section 6.2).
+
+   SE4. Tamper resistance.  The secure element SHOULD resist
+        physical probing, fault injection, and side-channel
+        attacks at a level commensurate with its certification
+        (e.g., Common Criteria EAL4+ or equivalent).
+
+6.2.  Biometric Gating
+
+   The device key MUST be created with an access control policy
+   that enforces biometric user presence on every key-agreement
+   operation.  Specifically:
+
+   BIO1. The key MUST require biometric authentication (face,
+         fingerprint, or iris) before each ECDH operation.
+         Passcode/PIN fallback SHOULD be disabled or limited
+         to a recovery-only path.
+
+   BIO2. The key SHOULD be bound to the current biometric
+         enrollment set.  If the user adds, removes, or re-
+         enrolls a biometric template, the key MUST become
+         permanently inaccessible.  This prevents an attacker
+         who gains device access from enrolling their own
+         biometric to unlock existing keys.
+
+   BIO3. The biometric match MUST be evaluated by the secure
+         element or a co-processor trusted by it -- not by the
+         application processor.  This ensures that a compromised
+         OS cannot forge a successful biometric match.
+
+6.3.  Key Lifecycle
+
+   - Generation.  d_U is generated inside the secure element
+     during registration.  The public key Q_U is exported for
+     transmission to the server.
+
+   - Usage.  Each OTP generation invokes ECDH(d_U, Q_child)
+     inside the secure element, gated by biometric.
+
+   - Invalidation.  The key becomes permanently unusable if:
+     (a) the biometric enrollment changes (per BIO2), or
+     (b) the user explicitly deletes the account, or
+     (c) the device is wiped or restored from backup.
+
+   - Non-migration.  Because d_U is non-extractable, there is no
+     mechanism to transfer a BIOTP enrollment to a new device.
+     Re-registration is required.
+
+
+7.  Server Master Key
+
+   The server MUST generate or derive a P-256 private scalar d_S
+   in the range [1, n-1].  The corresponding public key is:
+
+      Q_S = d_S * G
+
+   The master key pair (d_S, Q_S) is long-lived.  A single master
+   key MAY be used across all users of a given relying party.
+
+   Q_S is public and is distributed to devices during registration.
+
+   d_S MUST be kept confidential.  Hardware Security Modules (HSMs)
+   are RECOMMENDED.  Unlike a TOTP secret database (one secret per
+   user), d_S is a single value, simplifying HSM integration.
+
+   Implementations MAY derive d_S from a seed via HKDF [RFC5869]:
+
+      raw = HKDF-SHA256(seed, salt, info="master-private", L=32)
+      d_S = (int(raw) mod (n - 1)) + 1
+
+
+8.  Registration
+
+   Registration is the one-time online phase where the server and
+   device exchange public material and establish the enrollment.
+
+8.1.  Registration Payload
+
+   The server generates a session and encodes the following into a
+   QR code (or equivalent out-of-band channel):
+
+      callback_url     Full HTTPS URL to which the device POSTs
+                       its registration completion message.  The
+                       server MAY use any URL path; the client
+                       MUST NOT append or modify the path.
+      rp_name          Human-readable relying party name.
+      session_id       Unique session identifier (UUID).
+      master_public    Q_S as raw X || Y (64 octets, hex-encoded).
+      period           Time step in seconds (default: 30).
+      attest_challenge A fresh random challenge for device
+                       attestation (32 octets, base64).
+
+   The callback_url MUST use HTTPS.  Clients MUST reject HTTP URLs
+   except for loopback or private network addresses used during
+   development.
+
+   The protocol does not mandate any specific URL path structure.
+   The callback_url is opaque to the client -- it is used exactly
+   as provided, without modification.
+
+8.2.  Device Enrollment
+
+   Upon scanning the registration payload, the device:
+
+   1. Validates the payload fields (URL, key length, period).
+
+   2. Generates a P-256 key pair (d_U, Q_U) in the secure element
+      with the access policy specified in Section 6:
+      - Non-extractable (SE1).
+      - ECDH performed on-chip (SE2).
+      - Biometric required per operation (BIO1).
+      - Bound to current biometric enrollment (BIO2).
+
+   3. Exports the public key Q_U.
+
+   4. Stores Q_S and rp_name locally for future OTP generation.
+      These values are public and MAY be stored in any local
+      persistent storage protected by the platform's standard
+      data-at-rest encryption.
+
+8.3.  Device Attestation
+
+   The device SHOULD provide a hardware attestation proving that
+   d_U is held in a genuine secure element.  The attestation
+   binds the attest_challenge from the registration payload to
+   the device's public key Q_U.
+
+   The attestation format is platform-dependent.  The device MUST
+   include a platform identifier ("ios" or "android") in the
+   registration message so the server can select the appropriate
+   verification procedure.
+
+   The server SHOULD verify the attestation certificate chain
+   back to the platform vendor's root certificate, confirming
+   that the key was generated in a legitimate secure element.
+   The server SHOULD store the full attestation details (including
+   the parsed certificate chain and per-link verification status)
+   for audit purposes, regardless of whether verification
+   succeeds or fails.
+
+8.3.1.  Apple App Attest (iOS)
+
+   On iOS, the device uses DCAppAttestService to produce an
+   attestation object:
+
+   1. Generate an App Attest key via
+      DCAppAttestService.generateKey().
+
+   2. Compute clientDataHash = SHA-256(attest_challenge || Q_U).
+
+   3. Call DCAppAttestService.attestKey(keyId, clientDataHash)
+      to obtain a CBOR-encoded attestation object.
+
+   4. Send to the server: attest_key_id, attest_client_data_hash,
+      attest_object (base64), and attest_challenge.
+
+   The server verifies the attestation by:
+
+   (a) Decoding the CBOR attestation object.
+
+   (b) Checking fmt is "apple-appattest".
+
+   (c) Extracting the x5c certificate chain and verifying it
+       back to the Apple App Attestation Root CA.  The root CA
+       certificate (subject: "Apple App Attestation Root CA",
+       O: "Apple Inc.") is embedded in the server.
+
+   (d) Verifying the rpIdHash in authData matches the configured
+       app identity (SHA-256 of TeamID.BundleID), if configured.
+
+   (e) Extracting the credential ID from authData and comparing
+       it to the submitted attest_key_id.
+
+   (f) Computing the expected nonce as
+       SHA-256(authData || clientDataHash) and verifying it
+       matches the nonce in the leaf certificate's extension
+       OID 1.2.840.113635.100.8.2.
+
+   (g) Optionally verifying the attStmt signature over
+       authData || clientDataHash using the leaf certificate's
+       public key.
+
+8.3.2.  Android Key Attestation
+
+   On Android, the device uses the KeyStore attestation
+   certificate chain:
+
+   1. Generate the key pair with setAttestationChallenge(challenge)
+      in the KeyGenParameterSpec.  This causes the KeyStore to
+      embed the challenge in the key attestation extension.
+
+   2. After key generation, retrieve the certificate chain via
+      KeyStore.getCertificateChain(alias).
+
+   3. Send the chain to the server as a JSON array of
+      base64-encoded DER certificates (leaf first), along with
+      platform="android".
+
+   The server verifies the attestation by:
+
+   (a) Parsing each DER certificate in the chain.
+
+   (b) Verifying that each certificate is signed by the next
+       certificate in the chain (supporting both ECDSA and RSA
+       signatures, as Android chains may mix key types).
+
+   (c) Verifying that the last certificate in the chain is
+       signed by a known Google hardware attestation root
+       certificate.  There are two known roots: an RSA root
+       (serial f92009e853b6b045) and an EC root (serial
+       14c1a12e0000000020d).  The server MUST accept either.
+
+   (d) Checking the leaf certificate for the key attestation
+       extension (OID 1.3.6.1.4.1.11129.2.1.17).  This
+       extension contains an ASN.1 structure with the
+       attestation challenge, security level, and key
+       properties.
+
+   (e) Verifying that the attestation challenge in the extension
+       matches the expected value.
+
+   Note: Emulator and software-backed keys may produce a valid
+   certificate chain that is NOT rooted to a Google hardware
+   root, and may lack the key attestation extension entirely.
+   The server MAY accept such keys with a warning for development
+   purposes but MUST reject them in production.
+
+8.4.  Server Completion
+
+   The device POSTs a JSON object to the callback_url from the
+   registration payload (Section 8.1) containing:
+
+   - session_id
+   - user_id
+   - public_key (Q_U as hex, raw X || Y or uncompressed 04||X||Y)
+   - platform ("ios" or "android")
+   - Platform-specific attestation material (Section 8.3.1 or
+     8.3.2)
+
+   The server:
+
+   1. Validates the session is pending and not expired.
+   2. Validates Q_U is a valid P-256 point.  If Q_U is provided
+      as raw X || Y (64 octets), the server prepends the 0x04
+      uncompressed-point prefix before validation.
+   3. Dispatches to the appropriate attestation verifier based
+      on the platform field.
+   4. Stores the mapping: user_id -> (Q_U, platform, attestation
+      details).
+   5. Marks the session as completed.
+
+   The server does NOT store d_U, K, or any symmetric secret.
+   The only per-user secret-equivalent is Q_U (a public key).
+
+
+9.  Child Key Derivation
+
+   For each time step T, both sides derive a fresh key pair from
+   the server's master key using an additive tweak.
+
+9.1.  Tweak Computation
+
+      tweak = int(HMAC-SHA256(Q_S_raw, BE64(T))) mod n
+
+   Where Q_S_raw is the master public key in raw X || Y format
+   (64 octets), used as the HMAC key, and BE64(T) is the 8-octet
+   big-endian encoding of the time step counter.
+
+   If tweak is zero (probability ~2^{-256}), set tweak = 1.
+
+   The tweak is deterministic and publicly computable from Q_S
+   and T.  This is acceptable: its purpose is to produce a
+   distinct child key per time step, not to provide secrecy.
+   The security of the shared secret relies on the ECDH problem,
+   not on tweak unpredictability.
+
+9.2.  Server-Side Child Private Key
+
+      d_child = (d_S + tweak) mod n
+
+   If d_child is zero, set d_child = 1.
+
+9.3.  Client-Side Child Public Key
+
+      Q_child = Q_S + tweak * G
+
+   This follows from the group homomorphism:
+
+      d_child * G = (d_S + tweak) * G = Q_S + tweak * G
+
+   The device computes this without knowledge of d_S.
+
+   Note: Many platform EC libraries expose scalar multiplication
+   but not point addition.  Implementations MAY compute tweak * G
+   by constructing a private key from the tweak scalar and
+   extracting its public key, then performing the point addition
+   in software using finite-field arithmetic.
+
+
+10.  OTP Generation
+
+   OTP generation is performed entirely on the device, offline.
+
+10.1.  Biometric Unlock
+
+   Before performing ECDH, the device MUST prompt the user for
+   biometric authentication.  The prompt SHOULD clearly indicate
+   that an OTP is being generated for the relying party name
+   stored during registration.
+
+   If biometric authentication fails or is canceled, the device
+   MUST NOT perform the ECDH operation and MUST NOT produce an
+   OTP.
+
+   The biometric check is enforced by the secure element's access
+   policy (Section 6.2), not by application-level logic.  This
+   means the OS and application code cannot bypass the check.
+
+10.2.  Shared Secret Derivation
+
+   The device performs ECDH inside the secure element:
+
+      Z = ECDH(d_U, Q_child)
+
+   The raw shared secret Z is processed through X9.63 KDF:
+
+      shared_secret = X9.63-KDF(SHA-256, Z, SharedInfo="", L=32)
+
+   SharedInfo MUST be empty.  Output length L MUST be 32 octets.
+
+10.3.  HOTP Computation
+
+   The OTP is computed using HOTP [RFC4226] with SHA-256:
+
+      HS = HMAC-SHA256(shared_secret, BE64(T))
+
+   Dynamic truncation per [RFC4226] Section 5.3:
+
+      offset = HS[31] & 0x0F
+      binary = (HS[offset] & 0x7F) << 24
+             | HS[offset+1] << 16
+             | HS[offset+2] << 8
+             | HS[offset+3]
+      OTP = binary mod 10^Digit
+
+   Where Digit is the OTP length (default: 6).
+
+
+11.  OTP Verification
+
+   The server verifies a submitted OTP:
+
+   1. Look up the user's registered public key Q_U.
+
+   2. Compute T = floor(now / X).
+
+   3. For each T_i in {T, T-1, T+1, ..., T-s, T+s} where s is
+      the skew tolerance (RECOMMENDED: s = 1):
+
+      a. Compute tweak and d_child per Section 9.
+      b. Compute Z = ECDH(d_child, Q_U).
+      c. Derive shared_secret per Section 10.2.
+      d. Compute expected OTP per Section 10.3.
+      e. Compare using constant-time comparison.
+
+   4. If a match is found, the OTP is valid.
+
+   The server SHOULD track the last verified counter per user and
+   reject any OTP at a counter <= the recorded value.
+
+   The server SHOULD return identical error responses for unknown
+   users and invalid OTPs to prevent user enumeration.
+
+
+12.  Algorithm Parameters
+
+   +------------------+-------------------+-------------------------+
+   | Parameter        | Default           | Description             |
+   +------------------+-------------------+-------------------------+
+   | Curve            | P-256 (secp256r1) | Elliptic curve          |
+   | Hash             | SHA-256           | HMAC, KDF, and HOTP     |
+   | KDF              | X9.63-KDF         | Shared secret KDF       |
+   | KDF SharedInfo   | "" (empty)        | KDF additional input    |
+   | KDF Output       | 32 octets         | Derived key length      |
+   | Time Step (X)    | 30 seconds        | OTP period              |
+   | Digits           | 6                 | OTP digit count         |
+   | Skew (s)         | 1                 | Verification window     |
+   | Biometric policy | CurrentSet        | Biometric binding mode  |
+   +------------------+-------------------+-------------------------+
+
+   Implementations MUST support the default parameter set.
+
+
+13.  Security Considerations
+
+13.1.  Biometric Binding
+
+   The biometric requirement is the distinguishing security
+   property of BIOTP relative to both TOTP and standard ECDH-
+   based OTP schemes.
+
+   In TOTP, knowledge of K is sufficient to generate OTPs.  An
+   attacker who exfiltrates K (via backup, malware, or QR photo)
+   can generate OTPs indefinitely from any device without any
+   user interaction.
+
+   In BIOTP, generating an OTP requires:
+   (1) physical possession of the specific enrolled device,
+   (2) a matching biometric presented to the secure element, and
+   (3) the server's master public key (public material).
+
+   Condition (2) is enforced in hardware.  The application
+   processor never sees d_U or the raw biometric template.  A
+   compromised OS can display a fake biometric prompt but cannot
+   forge a successful match to the secure element.
+
+   The binding to "current biometric set" (BIO2) ensures that if
+   an attacker gains device access and enrolls their own
+   fingerprint or face, the existing BIOTP keys become permanently
+   invalid.  The attacker would need to re-register, which requires
+   server-side authorization.
+
+   Limitation: Biometric matching is probabilistic.  False accept
+   rates for modern face and fingerprint sensors are typically
+   1/50,000 to 1/1,000,000.  BIOTP does not improve on the
+   underlying biometric false accept rate of the device hardware.
+
+13.2.  Comparison with TOTP
+
+   +----------------------------+----------------+-------------------+
+   | Property                   | TOTP [RFC6238] | BIOTP             |
+   +----------------------------+----------------+-------------------+
+   | Secret type                | Symmetric K    | ECDH per step     |
+   | Server stores per user     | K (secret)     | Q_U (public)      |
+   | Server global secret       | None           | d_S               |
+   | Client secret              | K (copyable)   | d_U (SE-bound)    |
+   | Biometric required         | No             | Yes, per OTP      |
+   | Device bound               | No             | Yes (SE)          |
+   | Cloneable                  | Yes (copy K)   | No                |
+   | Offline generation         | Yes            | Yes               |
+   | OTP format                 | 6-8 digits     | 6 digits          |
+   | Server DB breach impact    | All K exposed  | Only Q_U (public) |
+   | Malware silent generation  | Yes (read K)   | No (bio required) |
+   +----------------------------+----------------+-------------------+
+
+13.3.  Master Key Compromise
+
+   If d_S is compromised, an attacker who also has access to the
+   user database (Q_U values) can compute shared secrets and
+   generate OTPs for any user without biometric authentication.
+
+   This is the primary residual risk.  Mitigations:
+
+   - d_S SHOULD be stored in an HSM.
+   - d_S is a single value (not per-user), simplifying HSM use.
+   - Server monitoring should detect anomalous verification
+     patterns (many users verified from a single IP).
+
+   Note: In standard TOTP, a server breach exposes every user's
+   secret unconditionally.  In BIOTP, the attacker needs BOTH d_S
+   AND the user database -- not just one.
+
+13.4.  Device Compromise
+
+   If an attacker obtains physical access to an unlocked device
+   with enrolled biometrics, they can generate OTPs for as long as
+   they maintain access.  This is equivalent to the TOTP case
+   (the attacker opens the authenticator app).
+
+   However, unlike TOTP, the attacker CANNOT:
+   - Export d_U to generate OTPs on another device.
+   - Generate OTPs after losing physical access.
+   - Generate OTPs after the device is remotely wiped.
+
+13.5.  Replay Protection
+
+   A valid OTP may be reused within the acceptance window unless
+   the server tracks the last verified counter.  Implementations
+   SHOULD record the highest verified counter per user and reject
+   OTPs at that counter or below.
+
+13.6.  Phishing Resistance
+
+   BIOTP does NOT provide phishing resistance.  The OTP is a
+   short numeric code that the user manually enters or transmits.
+   A real-time phishing proxy can relay the code to the legitimate
+   server within the validity window.
+
+   For phishing-resistant authentication, FIDO2/WebAuthn with
+   origin binding is RECOMMENDED.  BIOTP is designed for
+   scenarios where a numeric OTP is required by the verification
+   infrastructure.
+
+13.7.  Tweak Derivation
+
+   The tweak is HMAC-SHA256(Q_S, counter) and is publicly
+   computable.  This is acceptable because:
+
+   (a) Child public keys are themselves public.  Knowing Q_child
+       does not help compute the shared secret.
+
+   (b) The tweak's purpose is freshness, not secrecy.
+
+13.8.  Curve Choice
+
+   P-256 provides approximately 128-bit security.  P-384 or P-521
+   MAY be used for higher margins.  Curves with cofactor > 1
+   require cofactor multiplication.  P-256 has cofactor 1.
+
+
+14.  Test Vectors
+
+   Master Public Key Q_S (raw X||Y, hex, 64 octets):
+
+      6f4fac2b4a0927a12ff69c21b823cc116cc8396ab94e41dbe45e324a
+      564724ec9e171852b17829ecc811c91a4096cd77cdbd632ed4178ff0
+      f5e696ec5cbe502a
+
+   Counter T: 42
+
+   Counter (BE64, hex): 000000000000002a
+
+   Expected Child Public Key Q_child (raw X||Y, hex, 64 octets):
+
+      c8243b07c0fb2a3aa62a0840a517fcd4ffb17ac964c05c6fe56d913a
+      6a1d4e239fbc0b6640c3f3beb18e370453e0b0fbcbc795d8cb3e8580
+      fc9e20a35d26f999
+
+
+15.  IANA Considerations
+
+   This document has no IANA actions.
+
+
+16.  References
+
+16.1.  Normative References
+
+   [RFC2104]  Krawczyk, H., Bellare, M., and R. Canetti, "HMAC:
+              Keyed-Hashing for Message Authentication", RFC 2104,
+              DOI 10.17487/RFC2104, February 1997,
+              <https://www.rfc-editor.org/info/rfc2104>.
+
+   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119,
+              DOI 10.17487/RFC2119, March 1997,
+              <https://www.rfc-editor.org/info/rfc2119>.
+
+   [RFC4226]  M'Raihi, D., Bellare, M., Hoornaert, F., Naccache,
+              D., and O. Ranen, "HOTP: An HMAC-Based One-Time
+              Password Algorithm", RFC 4226,
+              DOI 10.17487/RFC4226, December 2005,
+              <https://www.rfc-editor.org/info/rfc4226>.
+
+   [RFC6238]  M'Raihi, D., Machani, S., Pei, M., and J. Rydell,
+              "TOTP: Time-Based One-Time Password Algorithm",
+              RFC 6238, DOI 10.17487/RFC6238, May 2011,
+              <https://www.rfc-editor.org/info/rfc6238>.
+
+   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in
+              RFC 2119 Key Words", BCP 14, RFC 8174,
+              DOI 10.17487/RFC8174, May 2017,
+              <https://www.rfc-editor.org/info/rfc8174>.
+
+   [FIPS180]  National Institute of Standards and Technology,
+              "Secure Hash Standard (SHS)", FIPS PUB 180-4,
+              August 2015.
+
+   [FIPS186]  National Institute of Standards and Technology,
+              "Digital Signature Standard (DSS)", FIPS PUB 186-5,
+              February 2023.
+
+   [SEC1]     Certicom Research, "SEC 1: Elliptic Curve
+              Cryptography", Version 2.0, May 2009.
+
+16.2.  Informative References
+
+   [RFC5869]  Krawczyk, H. and P. Eronen, "HMAC-based
+              Extract-and-Expand Key Derivation Function (HKDF)",
+              RFC 5869, DOI 10.17487/RFC5869, May 2010,
+              <https://www.rfc-editor.org/info/rfc5869>.
+
+   [FIDO2]    FIDO Alliance, "FIDO2: Web Authentication (WebAuthn)",
+              <https://fidoalliance.org/fido2/>.
+
+   [APPATTEST] Apple Inc., "DeviceCheck | Apple Developer
+              Documentation",
+              <https://developer.apple.com/documentation/devicecheck>.
+
+   [ANDROIDATTEST]
+              Google, "Verifying hardware-backed key pairs with
+              Key Attestation | Android Developers",
+              <https://developer.android.com/privacy-and-security/
+              security-key-attestation>.
+
+
+Appendix A.  Comparison with TOTP and FIDO2
+
+   +---------------------------+----------+----------+-----------+
+   | Property                  | TOTP     | FIDO2    | BIOTP     |
+   +---------------------------+----------+----------+-----------+
+   | Output format             | 6 digits | Assertion| 6 digits  |
+   | Requires browser/client   | No       | Yes      | No        |
+   | Works over phone/voice    | Yes      | No       | Yes       |
+   | Secret on server          | K each   | None     | None      |
+   | Device bound              | No       | Yes      | Yes       |
+   | Biometric enforced        | No       | Optional | Required  |
+   | Phishing resistant        | No       | Yes      | No        |
+   | Offline generation        | Yes      | N/A      | Yes       |
+   | Cloneable authenticator   | Yes      | No       | No        |
+   | Server DB breach impact   | Critical | None     | None      |
+   +---------------------------+----------+----------+-----------+
+
+   BIOTP occupies the space between TOTP and FIDO2: it retains
+   the numeric-code UX of TOTP while gaining the device-binding
+   and biometric properties closer to FIDO2.  It does not achieve
+   FIDO2's phishing resistance because the OTP is a bearer token
+   not bound to an origin.
+
+
+Appendix B.  Platform Mapping
+
+   The abstract secure element and attestation requirements
+   (Sections 6 and 8.3) map to platform APIs as follows:
+
+   Apple iOS:
+     Secure Element:
+       - Hardware: Secure Enclave Processor (SEP)
+       - Key type: kSecAttrKeyTypeECSECPrimeRandom, 256-bit
+       - Token: kSecAttrTokenIDSecureEnclave
+     Biometric Gating:
+       - Access control: .privateKeyUsage + .biometryCurrentSet
+       - Accessible: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+     ECDH:
+       - API: SecKeyCopyKeyExchangeResult
+       - Algorithm: .ecdhKeyExchangeStandardX963SHA256
+       - The Secure Enclave performs ECDH internally; d_U never
+         leaves the SEP.
+     Attestation (Section 8.3.1):
+       - API: DCAppAttestService
+       - Format: CBOR attestation object with x5c certificate
+         chain
+       - Root CA: Apple App Attestation Root CA (P-384)
+       - Nonce binding: SHA-256(authData || clientDataHash)
+         embedded in leaf cert extension OID
+         1.2.840.113635.100.8.2
+     KDF note:
+       - SecKeyCopyKeyExchangeResult with X9.63 SHA-256 applies
+         the KDF internally.  The caller receives the derived
+         32-byte key directly.
+
+   Android:
+     Secure Element:
+       - Hardware: StrongBox Keymaster (dedicated SE) or TEE
+       - Key type: KeyProperties.KEY_ALGORITHM_EC, "secp256r1"
+       - Purpose: KeyProperties.PURPOSE_AGREE_KEY
+     Biometric Gating:
+       - setUserAuthenticationRequired(true)
+       - setUserAuthenticationParameters(timeout,
+         AUTH_BIOMETRIC_STRONG)
+       - setInvalidatedByBiometricEnrollment(true)
+       - BiometricPrompt authenticates the user; the key is
+         unlocked for the specified timeout window.
+     ECDH:
+       - API: javax.crypto.KeyAgreement.getInstance("ECDH")
+       - The KeyStore performs ECDH on the secure hardware;
+         d_U never leaves the TEE/StrongBox.
+       - X9.63 KDF must be applied manually:
+         SHA-256(Z || 00000001) where Z is the raw ECDH output.
+     Attestation (Section 8.3.2):
+       - API: KeyGenParameterSpec.setAttestationChallenge()
+         followed by KeyStore.getCertificateChain()
+       - Format: X.509 DER certificate chain (leaf first)
+       - Root CAs: Google hardware attestation roots (RSA and
+         EC variants)
+       - Key attestation extension OID:
+         1.3.6.1.4.1.11129.2.1.17
+       - Contains: attestation challenge, security level
+         (Software/TEE/StrongBox), key properties
+       - Note: Emulator keys produce a valid chain but NOT
+         rooted to Google hardware roots, and may lack the
+         attestation extension.
+
+
+Appendix C.  Reference Implementation
+
+   The HumanCheck project provides a reference implementation
+   as a monorepo:
+
+   lib/biotp-swift:
+     A Swift package implementing child key derivation (P-256
+     point arithmetic with CryptoKit-accelerated scalar
+     multiplication), OTP generation (HOTP with SHA-256), and
+     hex encoding utilities.  Used by the iOS app.
+
+   lib/biotp-kotlin:
+     A pure Kotlin/JVM library implementing the same child key
+     derivation (P-256 point arithmetic using BigInteger), OTP
+     generation, and X9.63 KDF.  Used by the Android app.
+     Included in the Android project via Gradle composite build.
+
+   lib/biotp-py:
+     A Python package implementing the server-side master key,
+     child key derivation, shared secret computation, OTP
+     generation/verification, Apple App Attest verification,
+     and Android Key Attestation verification.  Installed into
+     the server's virtualenv via pip.
+
+   app/ios:
+     An iOS application (SwiftUI) that generates keys in the
+     Apple Secure Enclave, performs biometric-gated ECDH via
+     Security.framework, scans registration QR codes, and
+     displays OTPs with countdown timers.
+
+   app/android:
+     An Android application (Jetpack Compose) that generates
+     keys in the Android KeyStore (TEE/StrongBox-backed),
+     performs biometric-gated ECDH via BiometricPrompt +
+     KeyAgreement, scans QR codes or accepts pasted payloads,
+     and displays OTPs.  Sends the KeyStore attestation
+     certificate chain during registration.
+
+   server:
+     A Flask server that manages registration sessions, serves
+     QR payloads, dispatches attestation verification to the
+     appropriate platform handler (Apple or Android), and
+     verifies submitted OTPs.  The web dashboard displays
+     registered devices with parsed certificate chain
+     visualization and per-link signature validation status.
+
+
+Author's Address
+
+   Philipp Sippl
+
+   Email: (omitted from draft)

@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BIOTP Protocol Demo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 900: '#312e81' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --card-line: #e2e8f0;
+      --focus: #4f46e5;
+    }
+
+    html {
+      background: radial-gradient(circle at 10% 0%, #eef2ff 0%, #f8fafc 40%, #f5f7ff 100%);
+    }
+
+    body {
+      color: #0f172a;
+    }
+
+    .surface-card {
+      background: #ffffff;
+      border: 1px solid var(--card-line);
+      border-radius: 1rem;
+      box-shadow: 0 16px 36px -28px rgba(15, 23, 42, 0.46);
+    }
+
+    .surface-soft {
+      background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+      border: 1px solid var(--card-line);
+      border-radius: 1rem;
+      box-shadow: 0 12px 30px -28px rgba(15, 23, 42, 0.38);
+    }
+
+    .device-summary {
+      transition: border-color 0.15s ease;
+      --chip-shadow: 0 1px 0 rgba(15, 23, 42, 0.06);
+    }
+
+    .device-summary:hover {
+      border-color: #c7d2fe;
+    }
+
+    .device-summary .verify-chip {
+      border: 1px solid #dbe0ea;
+      background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+      box-shadow: var(--chip-shadow);
+    }
+
+    .device-otp-input.otp-input-ok {
+      border-color: #22c55e !important;
+      box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.35), 0 0 0 4px rgba(34, 197, 94, 0.1);
+      background: #ecfdf5;
+      color: #166534;
+      font-weight: 600;
+    }
+
+    .device-otp-input.otp-input-error {
+      border-color: #ef4444 !important;
+      box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.35), 0 0 0 4px rgba(239, 68, 68, 0.1);
+      background: #fef2f2;
+      color: #991b1b;
+    }
+
+    .device-otp-input.otp-input-verifying {
+      border-color: #6366f1 !important;
+      box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.22);
+      background: #f5f3ff;
+      color: #3730a3;
+    }
+
+    .verify-feedback {
+      width: 1.25rem;
+      height: 1.25rem;
+      border-radius: 9999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      opacity: 0;
+      transform: scale(0.85);
+      transition: opacity 140ms ease, transform 140ms ease;
+      flex-shrink: 0;
+    }
+
+    .verify-feedback.success {
+      opacity: 1;
+      transform: scale(1);
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .verify-feedback.error {
+      opacity: 1;
+      transform: scale(1);
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    @keyframes verifyPulse {
+      0% {
+        transform: scale(0.88);
+      }
+      50% {
+        transform: scale(1);
+      }
+      100% {
+        transform: scale(0.88);
+      }
+    }
+
+    .verify-feedback.pending {
+      opacity: 1;
+      transform: scale(1);
+      color: #3730a3;
+      animation: verifyPulse 0.8s ease-in-out infinite;
+      background: #eef2ff;
+    }
+
+  </style>
+</head>
+<body class="min-h-full antialiased">
+
+<div id="app" class="min-h-full">
+  <!-- Nav -->
+  <nav class="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur">
+    <div class="mx-auto max-w-6xl px-5 md:px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center shadow-sm">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+        </div>
+        <div>
+          <p class="text-lg font-semibold tracking-tight">BIOTP Protocol</p>
+          <p class="text-xs text-slate-500 -mt-1">Demo</p>
+        </div>
+      </div>
+      <div class="inline-flex items-center gap-2">
+        <a href="/how-it-works" class="inline-flex items-center gap-1.5 text-xs text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-full px-3 py-1 transition">
+          How It Works
+        </a>
+        <span class="inline-flex items-center gap-1.5 text-xs text-emerald-900 bg-emerald-50 rounded-full px-3 py-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+          Server Online
+        </span>
+      </div>
+    </div>
+  </nav>
+
+  <main class="mx-auto max-w-6xl px-5 md:px-6 py-8 space-y-8">
+    <section class="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-8">
+      <!-- Left: Registered Devices -->
+      <div class="space-y-4">
+        <div class="surface-card px-5 py-4 flex items-center justify-between gap-4">
+          <div>
+            <h1 class="text-lg font-semibold text-slate-900">Registered Devices</h1>
+            <p class="text-sm text-slate-500 mt-1">Manage enrolled devices.</p>
+          </div>
+          <button onclick="startRegistration()" class="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+            Register Device
+          </button>
+        </div>
+        <div id="users-list" class="space-y-3">
+          <div class="surface-soft p-8 text-center">
+            <svg class="mx-auto w-10 h-10 text-slate-400 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
+            <p class="text-sm text-slate-500">No devices registered yet</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Right: Verify OTP -->
+      <div class="space-y-4">
+        <!-- Server Key Status -->
+        <div class="space-y-3 surface-card p-5">
+          <h2 class="text-lg font-semibold text-slate-900">Derived Server Key</h2>
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-slate-500">Current Counter</span>
+              <span id="key-counter" class="text-sm font-mono text-slate-900">-</span>
+            </div>
+            <div class="flex items-center justify-between">
+              <span class="text-sm text-slate-500">Expires In</span>
+              <span id="key-expires" class="text-sm font-mono text-slate-900">-</span>
+            </div>
+            <div>
+              <span class="text-sm text-slate-500">Public Key</span>
+              <p id="key-pubkey" class="text-xs font-mono text-slate-600 mt-1 break-all leading-relaxed">-</p>
+            </div>
+            <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+              <div id="key-progress" class="bg-indigo-500 h-2 rounded-full transition-all duration-1000" style="width: 100%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- QR Registration Modal -->
+<div id="qr-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+  <div class="surface-card max-w-sm w-full mx-4 p-8">
+    <div class="text-center space-y-4">
+      <div class="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c.621-.504 1.125 1.125 1.125 1.125h-4.5A1.125 1.125 0 013.75 9.375v-4.5zM3.75 14.625c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5zM13.5 4.875c0-.621.504-1.125 1.125-1.125h4.5c.621 0 1.125.504 1.125 1.125v4.5c0 .621-.504 1.125-1.125 1.125h-4.5a1.125 1.125 0 01-1.125-1.125v-4.5z"/><path stroke-linecap="round" stroke-linejoin="round" d="M6.75 6.75h.75v.75h-.75v-.75zM6.75 16.5h.75v.75h-.75v-.75zM16.5 6.75h.75v.75H16.5v-.75zM13.5 13.5h.75v.75h-.75v-.75zM13.5 19.5h.75v.75h-.75v-.75zM19.5 13.5h.75v.75h-.75v-.75zM19.5 19.5h.75v.75h-.75v-.75zM16.5 16.5h.75v.75H16.5v-.75z"/></svg>
+      </div>
+      <div>
+        <h3 class="text-lg font-semibold text-slate-900">Scan with BIOTP app</h3>
+        <p class="text-sm text-slate-500 mt-1">Open the app and scan this QR code to register your device</p>
+      </div>
+      <div id="qr-container" class="bg-white rounded-xl p-4 inline-flex items-center justify-center ring-1 ring-slate-200" style="min-width:248px;min-height:248px"></div>
+      <button id="qr-copy-btn" onclick="copyQRPayload()" class="inline-flex items-center gap-1.5 text-xs text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-full px-3 py-1.5 transition">
+        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9.75a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184"/></svg>
+        Copy Payload
+      </button>
+      <div id="qr-status" class="text-sm text-slate-500">
+        <span class="inline-flex items-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span>
+          Waiting for device...
+        </span>
+      </div>
+      <button onclick="closeModal()" class="mt-2 text-sm text-slate-500 hover:text-slate-700 transition">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const COLORS = ['#6366f1', '#ec4899', '#14b8a6', '#f59e0b', '#8b5cf6', '#ef4444', '#06b6d4', '#22c55e'];
+
+function fnv1a64(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) {
+    return 0n;
+  }
+  let hash = 0xcbf29ce484222325n;
+  const fnvPrime = 0x100000001b3n;
+  const bytes = new TextEncoder().encode(normalized);
+  for (const byte of bytes) {
+    hash ^= BigInt(byte);
+    hash = (hash * fnvPrime) & 0xFFFFFFFFFFFFFFFFn;
+  }
+  return hash;
+}
+
+function iconColorFor(value) {
+  const index = Number(fnv1a64(value) % BigInt(COLORS.length));
+  return COLORS[index];
+}
+
+let pollInterval = null;
+let currentQRPayload = null;
+let detailsState = {};
+let isVerifyingOtp = false;
+
+function formatDateFromEpoch(value) {
+  if (!value && value !== 0) return 'not yet verified';
+  const ts = Number(value);
+  if (!Number.isFinite(ts)) return 'not available';
+  return new Date(ts * 1000).toLocaleString();
+}
+
+function escapeHtml(value) {
+  const str = value === undefined || value === null ? '' : String(value);
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderCertChain(details) {
+  if (!details || typeof details !== 'object') return '';
+  const chain = details.cert_chain;
+  if (!Array.isArray(chain) || chain.length === 0) return '';
+
+  const certs = chain.map((cert, i) => {
+    const valid = cert.signature_valid === true;
+    const borderColor = valid ? '#22c55e' : '#ef4444';
+    const bgColor = valid ? '#f0fdf4' : '#fef2f2';
+    const icon = valid ? '✓' : '✕';
+    const iconColor = valid ? '#166534' : '#991b1b';
+    const iconBg = valid ? '#dcfce7' : '#fee2e2';
+    const role = cert.role || `cert[${i}]`;
+    const roleLabel = role === 'leaf' ? '🔑 Leaf (device key)' : role === 'root' ? '🏛 Root' : `📋 Intermediate [${i}]`;
+
+    return `<div class="rounded border p-2" style="border-color:${borderColor};background:${bgColor}">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-bold" style="background:${iconBg};color:${iconColor}">${icon}</span>
+        <span class="font-medium text-slate-800 text-[11px]">${roleLabel}</span>
+        <span class="ml-auto text-[10px] font-mono" style="color:${iconColor}">${valid ? 'signature valid' : 'signature INVALID'}</span>
+      </div>
+      <div class="pl-6 space-y-0.5 text-[10px] text-slate-600">
+        <p>Subject: <span class="font-mono text-slate-800">${escapeHtml(cert.subject || 'n/a')}</span></p>
+        <p>Issuer: <span class="font-mono text-slate-800">${escapeHtml(cert.issuer || 'n/a')}</span></p>
+        <p>Valid: <span class="font-mono text-slate-800">${escapeHtml(cert.not_before || '?')} → ${escapeHtml(cert.not_after || '?')}</span></p>
+        <p>Signed by: <span class="font-mono text-slate-800">${escapeHtml(cert.signed_by || 'n/a')}</span></p>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div class="space-y-1.5 mt-1">
+    <p class="text-[11px] uppercase tracking-wide text-slate-500">Certificate Chain (${chain.length} cert${chain.length !== 1 ? 's' : ''})</p>
+    ${certs}
+  </div>`;
+}
+
+function formatAttestDetails(value) {
+  if (!value || typeof value !== 'object') {
+    return 'No attestation metadata stored.';
+  }
+  try {
+    return escapeHtml(JSON.stringify(value, null, 2));
+  } catch {
+    return escapeHtml(String(value));
+  }
+}
+
+function toggleDeviceDetails(detailsId) {
+  const el = document.getElementById(detailsId);
+  if (!el) return;
+  const arrow = document.getElementById(`${detailsId}-arrow`);
+  const isHidden = el.classList.contains('hidden');
+  if (isHidden) {
+    el.classList.remove('hidden');
+    if (arrow) arrow.classList.remove('-rotate-90');
+    detailsState[detailsId] = true;
+  } else {
+    el.classList.add('hidden');
+    if (arrow) arrow.classList.add('-rotate-90');
+    detailsState[detailsId] = false;
+  }
+}
+
+// -- Refresh users --
+async function refreshUsers() {
+  const previousInputs = Array.from(document.querySelectorAll('.device-otp-input')).reduce((acc, input) => {
+    const userId = input.dataset?.userId;
+    if (!userId) return acc;
+    acc[userId] = {
+      value: input.value || '',
+      isOk: input.classList.contains('otp-input-ok'),
+      isError: input.classList.contains('otp-input-error'),
+      isVerifying: input.classList.contains('otp-input-verifying')
+    };
+    return acc;
+  }, {});
+
+  const activeOtpInput = document.activeElement;
+  if (activeOtpInput && activeOtpInput.classList && activeOtpInput.classList.contains('device-otp-input')) {
+    return;
+  }
+
+  const res = await fetch('/users');
+  const data = await res.json();
+  const list = document.getElementById('users-list');
+
+  if (data.users.length === 0) {
+    list.innerHTML = `
+      <div class="surface-soft p-8 text-center">
+        <svg class="mx-auto w-10 h-10 text-slate-400 mb-2" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
+        <p class="text-sm text-slate-500">No devices registered yet</p>
+      </div>`;
+    return;
+  }
+
+  const users = (Array.isArray(data.users) ? data.users : []).slice().sort((a, b) => {
+    const left = ((a && a.relying_party) || '').trim().toLowerCase();
+    const right = ((b && b.relying_party) || '').trim().toLowerCase();
+    if (left !== right) {
+      return left < right ? -1 : 1;
+    }
+    const leftId = (a && a.user_id) || '';
+    const rightId = (b && b.user_id) || '';
+    if (leftId === rightId) return 0;
+    return leftId < rightId ? -1 : 1;
+  });
+
+  list.innerHTML = users.map((u, index) => {
+  const iconSeed = u.color_seed || u.relying_party || u.user_id;
+  const displayName = u.relying_party || u.user_id;
+  const normalizedSeed = (displayName || '').trim();
+  const seedColor = typeof u.icon_color === 'string' ? u.icon_color.trim() : '';
+  const color = /^#([0-9a-fA-F]{6})$/.test(seedColor) ? seedColor : iconColorFor(iconSeed);
+  const initial = normalizedSeed.substring(0, 1).toUpperCase();
+    const detailsId = `device-details-${index}`;
+    const platform = u.platform || 'ios';
+    const platformLabel = platform === 'android' ? 'Android' : 'Apple';
+    const platformIcon = '';
+    const attest = (u.attestation && typeof u.attestation === 'object') ? u.attestation :
+                   (u.app_attest && typeof u.app_attest === 'object') ? u.app_attest : null;
+    const attestValid = attest && attest.valid === true;
+    const attestVerified = formatDateFromEpoch(attest && attest.verified_at);
+    const attestDetails = attest && attest.details ? attest.details : null;
+    const attestDetailsText = formatAttestDetails(attestDetails);
+    const attestWarning = attestDetails && attestDetails.warning ? attestDetails.warning : null;
+    const statusText = attestValid
+      ? (attestWarning ? `${platformLabel} attestation accepted (${attestWarning})` : `${platformLabel} attestation verified`)
+      : `${platformLabel} attestation not verified`;
+    const verifyInputId = `device-verify-input-${index}`;
+    const verifyStatusId = `device-verify-status-${index}`;
+    const detailsOpen = detailsState[detailsId] ? '' : 'hidden';
+    const arrowRotation = detailsState[detailsId] ? '' : '-rotate-90';
+        return `
+        <div class="surface-card device-summary overflow-hidden">
+        <div class="px-4 py-3">
+          <div class="rounded-2xl border border-slate-200/70 bg-white/60 p-2">
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <button type="button" onclick="toggleDeviceDetails('${detailsId}')" class="text-left flex min-w-0 flex-1 items-center gap-4 py-1.5 px-1.5 rounded-xl hover:bg-slate-50 transition">
+                <div class="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm flex-shrink-0 shadow-sm" style="background:${color}">
+                  ${initial}
+                </div>
+                <div class="flex-1 min-w-0">
+                  <p class="text-base font-semibold text-slate-900">${displayName}</p>
+                  <p class="text-xs font-mono text-slate-500 truncate">${u.public_key}</p>
+                </div>
+                <svg id="${detailsId}-arrow" class="w-4 h-4 text-slate-500 transition-transform ${arrowRotation}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="m19 9-7 7-7-7"/>
+                </svg>
+              </button>
+              <div class="verify-chip shrink-0 w-full md:w-auto rounded-lg px-2 py-1.5 flex items-center gap-2">
+                <span class="shrink-0 text-[11px] uppercase tracking-wide text-slate-500 whitespace-nowrap">Verify OTP</span>
+                <div class="relative">
+                  <input
+                    id="${verifyInputId}"
+                    data-user-id="${escapeHtml(u.user_id)}"
+                    data-status-id="${verifyStatusId}"
+                    name="hc-${verifyInputId}"
+                    autocomplete="off"
+                    autocorrect="off"
+                    autocapitalize="off"
+                    spellcheck="false"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    class="device-otp-input shrink-0 rounded-md border border-slate-200 bg-white px-2 py-1.5 w-[10ch] text-center text-xs font-mono tracking-[0.04em] text-slate-900 focus:border-brand-500 focus:ring-2 focus:ring-brand-100 outline-none"
+                    maxlength="6"
+                    pattern="[0-9]*"
+                    inputmode="numeric"
+                    placeholder="000000"
+                    type="text"
+                  />
+                  <span id="${verifyStatusId}" class="verify-feedback" aria-live="polite" aria-hidden="true"></span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+          <div id="${detailsId}" class="${detailsOpen} border-t border-slate-200 px-4 py-3 bg-slate-50">
+            <div class="space-y-2 text-xs">
+              <div class="flex items-center gap-2">
+                <span class="text-base">${platformIcon}</span>
+                <p class="font-medium text-slate-700">${statusText}</p>
+              </div>
+              <div class="rounded border border-slate-200 bg-white p-2">
+                <p class="text-[11px] uppercase tracking-wide text-slate-500 mb-1">${platformLabel} Device Attestation</p>
+                <p class="text-slate-700">Platform: <span class="font-mono text-slate-900">${platform}</span></p>
+                <p class="text-slate-700 mt-1">Verified At: <span class="font-mono text-slate-900">${attestVerified}</span></p>
+              </div>
+              ${renderCertChain(attestDetails)}
+              <div class="rounded border border-slate-200 bg-slate-900 p-2">
+                <p class="text-[11px] uppercase tracking-wide text-slate-300">Raw Details</p>
+                <pre class="mt-1 text-[10px] leading-relaxed break-words whitespace-pre-wrap text-slate-100">${attestDetailsText}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  Array.from(document.querySelectorAll('.device-otp-input')).forEach((input) => {
+    const userId = input.dataset?.userId;
+    const state = userId ? previousInputs[userId] : null;
+    if (!state) return;
+    if (state.value) {
+      input.value = state.value;
+    }
+    if (state.isOk) {
+      setVerifyVisualState(input, 'ok');
+    } else if (state.isError) {
+      setVerifyVisualState(input, 'error');
+    } else if (state.isVerifying) {
+      setVerifyVisualState(input, 'verifying');
+    }
+  });
+
+  bindDeviceOtpInputs();
+}
+
+// -- Registration --
+async function startRegistration() {
+  const res = await fetch('/register/start', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({rp_name: 'BIOTP Demo'})
+  });
+  const data = await res.json();
+
+  document.getElementById('qr-modal').classList.remove('hidden');
+  document.getElementById('qr-status').innerHTML = `
+    <span class="inline-flex items-center gap-1.5">
+      <span class="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse"></span>
+      Waiting for device...
+    </span>`;
+
+  const qrData = JSON.stringify(data.qr_data);
+  currentQRPayload = qrData;
+  const container = document.getElementById('qr-container');
+  container.innerHTML = '';
+  new QRCode(container, {
+    text: qrData,
+    width: 220,
+    height: 220,
+    colorDark: '#1e1b4b',
+    colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.M,
+  });
+
+  if (pollInterval) clearInterval(pollInterval);
+  pollInterval = setInterval(async () => {
+    const sRes = await fetch(`/register/status/${data.session_id}`);
+    const sData = await sRes.json();
+    if (sData.status === 'completed') {
+      clearInterval(pollInterval);
+      pollInterval = null;
+      document.getElementById('qr-status').innerHTML = `
+        <span class="inline-flex items-center gap-1.5 text-green-400">
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.857-9.809a.75.75 0 00-1.214-.882l3.483 4.79-1.88-1.88a.75.75 0 10-1.06 1.061l2.5 2.5a.75.75 0 001.137-.089l4-5.5z" clip-rule="evenodd"/></svg>
+          Device registered: ${sData.user_id}
+        </span>`;
+      refreshUsers();
+      setTimeout(closeModal, 2000);
+    }
+  }, 1500);
+}
+
+function copyQRPayload() {
+  if (!currentQRPayload) return;
+  navigator.clipboard.writeText(currentQRPayload).then(() => {
+    const btn = document.getElementById('qr-copy-btn');
+    const original = btn.innerHTML;
+    btn.innerHTML = '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg> Copied!';
+    setTimeout(() => { btn.innerHTML = original; }, 1500);
+  });
+}
+
+function closeModal() {
+  document.getElementById('qr-modal').classList.add('hidden');
+  if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+}
+
+// -- Verify OTP --
+async function verifyOTP() {
+  const userId = this?.dataset?.userId;
+  const input = this;
+  if (!userId || !input) {
+    return;
+  }
+
+  const otp = (input.value || '').replace(/\D/g, '').slice(0, 6);
+  input.value = otp;
+
+  setVerifyVisualState(input, 'clear');
+  if (!otp.length) {
+    return;
+  }
+
+  if (isVerifyingOtp) {
+    return;
+  }
+
+  if (otp.length !== 6) {
+    return;
+  }
+
+  setVerifyVisualState(input, 'verifying');
+  isVerifyingOtp = true;
+  let data;
+  try {
+    const res = await fetch('/verify', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({user_id: userId, otp})
+    });
+    data = await res.json();
+  } finally {
+    isVerifyingOtp = false;
+  }
+  if (!data) return;
+
+  if (data.valid) {
+    setVerifyVisualState(input, 'ok');
+  } else {
+    setVerifyVisualState(input, 'error');
+  }
+}
+
+function setVerifyVisualState(input, state) {
+  if (!input || !input.classList || !input.dataset) {
+    return;
+  }
+
+  const feedback = input.dataset.statusId ? document.getElementById(input.dataset.statusId) : null;
+
+  input.classList.remove('otp-input-ok', 'otp-input-error', 'otp-input-verifying');
+  if (feedback) {
+    feedback.classList.remove('success', 'error', 'pending');
+    feedback.textContent = '';
+    feedback.setAttribute('aria-hidden', 'true');
+  }
+
+  if (state === 'ok') {
+    input.classList.add('otp-input-ok');
+    if (feedback) {
+      feedback.classList.add('success');
+      feedback.textContent = '✓';
+      feedback.setAttribute('aria-hidden', 'false');
+    }
+    return;
+  }
+
+  if (state === 'error') {
+    input.classList.add('otp-input-error');
+    if (feedback) {
+      feedback.classList.add('error');
+      feedback.textContent = '✕';
+      feedback.setAttribute('aria-hidden', 'false');
+    }
+    return;
+  }
+
+  if (state === 'verifying') {
+    input.classList.add('otp-input-verifying');
+    if (feedback) {
+      feedback.classList.add('pending');
+      feedback.textContent = '↻';
+      feedback.setAttribute('aria-hidden', 'false');
+    }
+    return;
+  }
+}
+
+function bindDeviceOtpInputs() {
+  const inputs = document.querySelectorAll('.device-otp-input');
+  inputs.forEach((input) => {
+    if (input.dataset.bound === '1') return;
+    input.dataset.bound = '1';
+
+    input.addEventListener('input', (e) => {
+      const el = e.target;
+      const sanitized = (el.value || '').replace(/\D/g, '').slice(0, 6);
+      el.value = sanitized;
+
+      setVerifyVisualState(el, 'clear');
+
+      if (!sanitized.length) {
+        return;
+      }
+
+      if (sanitized.length === 6) {
+        verifyOTP.call(el);
+      }
+    });
+
+    input.addEventListener('focus', () => {
+      setVerifyVisualState(input, 'clear');
+    });
+
+    input.addEventListener('click', () => {
+      setVerifyVisualState(input, 'clear');
+      input.value = '';
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        verifyOTP.call(e.target);
+      }
+    });
+  });
+}
+
+// -- Server key status --
+async function refreshKeyStatus() {
+  try {
+    const res = await fetch('/key');
+    const data = await res.json();
+    document.getElementById('key-counter').textContent = data.counter;
+    document.getElementById('key-expires').textContent = data.expires_in + 's';
+    document.getElementById('key-pubkey').textContent = data.public_key;
+    document.getElementById('key-progress').style.width = ((data.expires_in / 30) * 100) + '%';
+  } catch(e) {}
+}
+
+// -- Init --
+refreshUsers();
+refreshKeyStatus();
+setInterval(refreshKeyStatus, 2000);
+setInterval(refreshUsers, 5000);
+
+document.getElementById('qr-modal').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+bindDeviceOtpInputs();
+</script>
+</body>
+</html>

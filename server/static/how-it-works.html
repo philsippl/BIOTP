@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BIOTP Protocol - How It Works</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: { 50: '#eef2ff', 100: '#e0e7ff', 500: '#6366f1', 600: '#4f46e5', 700: '#4338ca', 900: '#312e81' }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    :root {
+      color-scheme: light;
+      --card-line: #e2e8f0;
+    }
+
+    html,
+    body {
+      min-height: 100%;
+      overflow-x: hidden;
+      background: radial-gradient(circle at 10% 0%, #eef2ff 0%, #f8fafc 40%, #f5f7ff 100%);
+    }
+
+    body {
+      color: #0f172a;
+    }
+
+    .surface-card {
+      background: #ffffff;
+      border: 1px solid var(--card-line);
+      border-radius: 1rem;
+      box-shadow: 0 16px 36px -28px rgba(15, 23, 42, 0.46);
+    }
+
+    .formula {
+      background: #0f172a;
+      color: #e2e8f0;
+      border-radius: 0.75rem;
+      padding: 0.8rem 1rem;
+      overflow-x: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      font-size: 0.84rem;
+      line-height: 1.45;
+      border: 1px solid #1e293b;
+    }
+
+    .tag {
+      border: 1px solid #dbeafe;
+      background: #eff6ff;
+      color: #1e3a8a;
+      border-radius: 9999px;
+      padding: 0.12rem 0.55rem;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+    }
+
+    p,
+    li {
+      overflow-wrap: anywhere;
+    }
+
+    code {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body class="min-h-full antialiased">
+  <div class="min-h-full">
+    <nav class="sticky top-0 z-50 border-b border-slate-200/80 bg-white/95 backdrop-blur">
+      <div class="mx-auto max-w-6xl px-5 md:px-6 py-4 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex min-w-0 items-center gap-3">
+          <div class="w-9 h-9 rounded-xl bg-brand-600 flex items-center justify-center shadow-sm">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+          </div>
+          <div>
+            <p class="text-lg font-semibold tracking-tight">How BIOTP Works</p>
+            <p class="text-xs text-slate-500 -mt-1">Protocol details</p>
+          </div>
+        </div>
+        <a href="/" class="inline-flex shrink-0 items-center gap-2 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-brand-700 transition">
+          Back to Demo
+        </a>
+      </div>
+    </nav>
+
+    <main class="mx-auto max-w-6xl px-5 md:px-6 py-8 space-y-6">
+      <section class="surface-card p-5 md:p-6">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="tag">Overview</span>
+        </div>
+        <p class="text-sm text-slate-700 leading-relaxed">
+          BIOTP replaces the symmetric shared secret in TOTP with per-time-step ECDH key agreement over P-256.
+          The device private key lives in a hardware secure element (Secure Enclave on iOS, TEE/StrongBox on Android)
+          and is gated on biometric authentication. The server stores only user public keys.
+          OTP generation is fully offline after a one-time registration.
+        </p>
+      </section>
+
+      <section class="surface-card p-5 md:p-6">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="tag">1. Registration</span>
+        </div>
+        <p class="text-sm text-slate-700 mb-3">
+          The device scans a QR payload (or pastes it manually). The payload contains:
+        </p>
+        <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1.5">
+          <li><code>callback_url</code>: full URL the device POSTs registration to</li>
+          <li><code>master_public</code>: server master public key, raw P-256 <code>X||Y</code> (64 bytes)</li>
+          <li><code>period</code>: time step in seconds (default 30)</li>
+          <li><code>session_id</code>: unique registration session</li>
+          <li><code>rp_name</code>: relying party display name</li>
+          <li><code>attest_challenge</code>: random challenge for device attestation</li>
+        </ul>
+        <p class="text-sm text-slate-700 mt-3">
+          The device generates a P-256 keypair in the secure element and POSTs its public key,
+          platform identifier, and attestation material to the <code>callback_url</code>.
+        </p>
+      </section>
+
+      <section class="surface-card p-5 md:p-6">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="tag">2. Child Key Derivation</span>
+        </div>
+        <p class="text-sm text-slate-700 mb-3">
+          For counter <code>c = floor(unix_time / period)</code>, both sides derive matching child keys
+          using the master public key as the HMAC key:
+        </p>
+        <pre class="formula">tweak        = HMAC-SHA256(master_public, uint64_be(c)) mod n
+child_public  = master_public + tweak * G        <span class="text-slate-500">// device computes this</span>
+child_private = (master_private + tweak) mod n    <span class="text-slate-500">// server computes this</span></pre>
+        <p class="text-xs text-slate-500 mt-2">
+          <code>n</code> is the P-256 curve order. <code>G</code> is the generator point.
+          The tweak is publicly computable — its purpose is freshness, not secrecy.
+        </p>
+      </section>
+
+      <section class="surface-card p-5 md:p-6">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="tag">3. OTP Generation</span>
+        </div>
+        <p class="text-sm text-slate-700 mb-3">
+          After biometric authentication unlocks the secure element key, the device computes:
+        </p>
+        <pre class="formula">shared_secret = X9.63-KDF-SHA256(ECDH(device_private, child_public), L=32)
+h             = HMAC-SHA256(shared_secret, uint64_be(c))
+offset        = h[31] &amp; 0x0F
+otp           = trunc31(h[offset..offset+4]) mod 1_000_000</pre>
+        <p class="text-xs text-slate-500 mt-2">
+          This is standard RFC 4226 dynamic truncation with SHA-256 instead of SHA-1.
+        </p>
+      </section>
+
+      <section class="surface-card p-5 md:p-6">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="tag">4. Server Verification</span>
+        </div>
+        <p class="text-sm text-slate-700 mb-3">
+          The server checks the submitted OTP against the current, previous, and next counter:
+        </p>
+        <ol class="list-decimal pl-5 text-sm text-slate-700 space-y-1.5">
+          <li>Derive <code>child_private</code> for each candidate counter.</li>
+          <li>Compute ECDH with the stored user public key.</li>
+          <li>Apply X9.63-KDF-SHA256 (32-byte output).</li>
+          <li>Recompute the 6-digit OTP and compare in constant time.</li>
+          <li>Reject if the counter was already used (replay protection).</li>
+        </ol>
+      </section>
+
+      <section class="surface-card p-5 md:p-6">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="tag">5. Device Attestation</span>
+        </div>
+        <p class="text-sm text-slate-700 mb-3">
+          During registration, the device provides a hardware attestation proving the key is held in a genuine
+          secure element. The format is platform-specific:
+        </p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3">
+          <div class="rounded-lg border border-slate-200 p-3">
+            <p class="text-xs font-semibold text-slate-800 mb-2">iOS — Apple App Attest</p>
+            <ul class="list-disc pl-4 text-xs text-slate-600 space-y-1">
+              <li>CBOR attestation object from DCAppAttestService</li>
+              <li>x5c certificate chain → Apple App Attestation Root CA</li>
+              <li>Nonce binding via OID <code>1.2.840.113635.100.8.2</code></li>
+              <li>Optional rpIdHash enforcement (Team ID + Bundle ID)</li>
+            </ul>
+          </div>
+          <div class="rounded-lg border border-slate-200 p-3">
+            <p class="text-xs font-semibold text-slate-800 mb-2">Android — KeyStore Attestation</p>
+            <ul class="list-disc pl-4 text-xs text-slate-600 space-y-1">
+              <li>X.509 DER certificate chain from KeyStore</li>
+              <li>Chain verified → Google hardware attestation root</li>
+              <li>Key attestation extension OID <code>1.3.6.1.4.1.11129.2.1.17</code></li>
+              <li>Attestation challenge embedded at key generation</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <section class="surface-card p-5 md:p-6">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="tag">Security Properties</span>
+        </div>
+        <ul class="list-disc pl-5 text-sm text-slate-700 space-y-1.5">
+          <li><strong>No per-user secrets on server.</strong> Only public keys are stored. A database breach exposes nothing useful.</li>
+          <li><strong>Device-bound.</strong> The private key is non-extractable from the secure element. Cloning the authenticator is not possible.</li>
+          <li><strong>Biometric-gated.</strong> Every OTP generation requires a live biometric match enforced by hardware. Malware cannot silently generate codes.</li>
+          <li><strong>Offline.</strong> No network needed after registration.</li>
+          <li><strong>Standard output.</strong> 6-digit code compatible with any OTP input field.</li>
+          <li><strong>Trade-off:</strong> The server master private key is a single high-value secret. If compromised together with the user database, an attacker can generate OTPs. HSM protection is recommended.</li>
+        </ul>
+      </section>
+
+      <section class="surface-card p-5 md:p-6">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="tag">Note</span>
+        </div>
+        <p class="text-sm text-slate-700">
+          This server is a reference implementation for demonstration purposes. It uses in-memory storage — restarting clears all users and sessions.
+        </p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

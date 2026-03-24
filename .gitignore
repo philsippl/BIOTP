@@ -1,0 +1,26 @@
+# OS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.egg-info/
+
+# Swift
+.build/
+.swiftpm/xcode/xcuserdata/
+
+# Xcode
+xcuserdata/
+DerivedData/
+
+# Android / Gradle
+.gradle/
+build/
+local.properties
+*.apk
+
+# IDE
+.idea/
+*.iml

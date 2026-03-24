@@ -1,0 +1,3 @@
+<resources>
+    <style name="Theme.HumanCheck" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

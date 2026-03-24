@@ -29,9 +29,22 @@
 		4D9E2F7A2F72952100DFE7FC /* HumanCheckUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HumanCheckUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		4D9E2FA02F72960000DFE7FC /* Exceptions for "HumanCheck" folder in "HumanCheck" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 4D9E2F622F72952000DFE7FC /* HumanCheck */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		4D9E2F652F72952000DFE7FC /* HumanCheck */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				4D9E2FA02F72960000DFE7FC /* Exceptions for "HumanCheck" folder in "HumanCheck" target */,
+			);
 			path = HumanCheck;
 			sourceTree = "<group>";
 		};
@@ -112,6 +125,7 @@
 			);
 			name = HumanCheck;
 			packageProductDependencies = (
+				4DB10A0012F72A0100DFE7FC /* BIOTP */,
 			);
 			productName = HumanCheck;
 			productReference = 4D9E2F632F72952000DFE7FC /* HumanCheck.app */;
@@ -135,6 +149,7 @@
 			);
 			name = HumanCheckTests;
 			packageProductDependencies = (
+				4DB10A0022F72A0100DFE7FC /* BIOTP */,
 			);
 			productName = HumanCheckTests;
 			productReference = 4D9E2F702F72952100DFE7FC /* HumanCheckTests.xctest */;
@@ -195,6 +210,9 @@
 			);
 			mainGroup = 4D9E2F5A2F72952000DFE7FC;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				4DB10A0002F72A0100DFE7FC /* XCLocalSwiftPackageReference "BIOTP" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 4D9E2F642F72952000DFE7FC /* Products */;
 			projectDirPath = "";
@@ -399,7 +417,10 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = PNXHZNX557;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HumanCheck/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Camera is used to scan QR codes for device registration";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Authenticate to sign challenges with your Secure Enclave key";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -431,7 +452,10 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = PNXHZNX557;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = HumanCheck/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Camera is used to scan QR codes for device registration";
+				INFOPLIST_KEY_NSFaceIDUsageDescription = "Authenticate to sign challenges with your Secure Enclave key";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -578,6 +602,24 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		4DB10A0002F72A0100DFE7FC /* XCLocalSwiftPackageReference "BIOTP" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = ../../lib/biotp-swift;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		4DB10A0012F72A0100DFE7FC /* BIOTP */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BIOTP;
+		};
+		4DB10A0022F72A0100DFE7FC /* BIOTP */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = BIOTP;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 4D9E2F5B2F72952000DFE7FC /* Project object */;
 }

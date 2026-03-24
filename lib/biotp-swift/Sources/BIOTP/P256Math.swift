@@ -79,23 +79,6 @@ public struct UInt256: Equatable, Sendable {
         return (r, borrow)
     }
 
-    public func bit(_ n: Int) -> Bool {
-        let limb: UInt64
-        switch n / 64 {
-        case 0: limb = w.0; case 1: limb = w.1
-        case 2: limb = w.2; case 3: limb = w.3
-        default: return false
-        }
-        return (limb >> (n % 64)) & 1 == 1
-    }
-
-    public var bitWidth: Int {
-        if w.3 != 0 { return 256 - w.3.leadingZeroBitCount }
-        if w.2 != 0 { return 192 - w.2.leadingZeroBitCount }
-        if w.1 != 0 { return 128 - w.1.leadingZeroBitCount }
-        if w.0 != 0 { return  64 - w.0.leadingZeroBitCount }
-        return 0
-    }
 
     public func shiftedRight1(withExtraBit extraBit: Bool = false) -> UInt256 {
         let extra: UInt64 = extraBit ? 1 : 0
@@ -123,11 +106,6 @@ public struct P256Field: Sendable {
     public static let pPlus1Over4 = UInt256(w: (
         0x0000000000000000, 0x0000000040000000,
         0x4000000000000000, 0x3FFFFFFFC0000000
-    ))
-
-    public static let b = UInt256(w: (
-        0x3BCE3C3E27D2604B, 0x651D06B0CC53B0F6,
-        0xB3EBBD55769886BC, 0x5AC635D8AA3A93E7
     ))
 
     public static func modAdd(_ a: UInt256, _ b: UInt256, _ mod: UInt256) -> UInt256 {
@@ -236,12 +214,6 @@ public struct ECPoint: Equatable, Sendable {
         self.x = UInt256(data: data[0..<32])
         self.y = UInt256(data: data[32..<64])
         self.isInfinity = false
-    }
-
-    public var uncompressedData: Data {
-        var out = Data([0x04])
-        out.append(x.data); out.append(y.data)
-        return out
     }
 
     public var rawData: Data {

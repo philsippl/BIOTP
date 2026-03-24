@@ -177,21 +177,13 @@ def _verify_chain(certs: list) -> tuple[bool, str, list[dict]]:
         if not entry["signature_valid"]:
             return False, f"chain verification failed at cert[{entry['index']}]", chain_info
 
-    # Verify last cert against any known Google root
+    # Verify last cert against any known Google root (cryptographic check only)
     last_cert = certs[-1]
     root_verified = False
     for root in GOOGLE_ROOTS:
         if _verify_cert_signature(last_cert, root.public_key()):
             root_verified = True
             break
-    if not root_verified:
-        for root in GOOGLE_ROOTS:
-            try:
-                if last_cert.subject == root.subject and last_cert.serial_number == root.serial_number:
-                    root_verified = True
-                    break
-            except Exception:
-                continue
 
     if chain_info:
         chain_info[-1]["signature_valid"] = root_verified
@@ -243,31 +235,37 @@ def verify_android_attestation(
         details["attestation_extension_len"] = len(ext_data)
     except x509.ExtensionNotFound:
         details["attestation_extension_present"] = False
-        # No attestation extension — chain is valid but not hardware-attested
-        # (e.g., emulator). Accept with a warning.
-        details["warning"] = "no key attestation extension; key may not be hardware-backed"
-        details["valid"] = True
-        details["verified_at"] = time.time()
-        return True, "ok (no attestation extension)", details
+        return False, "no key attestation extension; key is not hardware-attested", details
 
-    # The attestation extension is an ASN.1 SEQUENCE. The challenge is
-    # at a known offset. For simplicity, we do a substring search for
-    # the expected challenge bytes within the extension data.
-    # A production implementation should fully parse the ASN.1 structure.
+    # Verify the leaf certificate public key matches the registered public key.
+    # The leaf cert in an Android KeyStore attestation chain contains the attested key.
+    try:
+        leaf_pub = leaf.public_key()
+        if isinstance(leaf_pub, ec.EllipticCurvePublicKey):
+            leaf_nums = leaf_pub.public_numbers()
+            leaf_x = leaf_nums.x.to_bytes(32, "big")
+            leaf_y = leaf_nums.y.to_bytes(32, "big")
+            leaf_raw_hex = (leaf_x + leaf_y).hex()
+            details["leaf_public_key_hex"] = leaf_raw_hex[:20] + "..."
+            if leaf_raw_hex != user_public_key_hex:
+                return False, "leaf certificate public key does not match registered key", details
+            details["public_key_binding"] = True
+        else:
+            return False, "leaf certificate does not contain an EC public key", details
+    except Exception as exc:
+        return False, f"failed to extract leaf public key: {exc}", details
+
+    # Verify the challenge is present in the attestation extension.
     challenge_hash = hashlib.sha256(
         expected_challenge + bytes.fromhex(user_public_key_hex)
     ).digest()
 
-    # Check if raw challenge or hashed challenge appears in extension
     if expected_challenge in ext_data:
         details["challenge_binding"] = "raw_challenge_found"
     elif challenge_hash in ext_data:
         details["challenge_binding"] = "challenge_hash_found"
     else:
-        # Challenge may be embedded differently depending on attestation version.
-        # For PoC, log but don't fail — the chain verification is the primary check.
-        details["challenge_binding"] = "not_verified"
-        details["warning"] = "challenge not found in attestation extension; chain is valid"
+        return False, "challenge not found in attestation extension", details
 
     details["valid"] = True
     details["verified_at"] = time.time()

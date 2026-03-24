@@ -53,7 +53,10 @@ class KeyStoreManager {
         // user presence and any process on the device can perform ECDH silently.
         if (useBiometric) {
             builder.setUserAuthenticationRequired(true)
-                .setUserAuthenticationParameters(10, KeyProperties.AUTH_BIOMETRIC_STRONG)
+                // Ideally 0 (per-use) with CryptoObject, but KeyAgreement is not a
+                // supported CryptoObject type in stable biometric libs. Use 1s as the
+                // tightest practical window.
+                .setUserAuthenticationParameters(1, KeyProperties.AUTH_BIOMETRIC_STRONG)
                 .setInvalidatedByBiometricEnrollment(true)
         }
 
@@ -79,9 +82,6 @@ class KeyStoreManager {
         serverPublicKeyData: ByteArray,
         activity: FragmentActivity,
     ): ByteArray {
-        // WARNING: Same as above — skipping the biometric prompt is ONLY for
-        // emulator testing. A production app MUST require biometric auth before
-        // every ECDH operation. See BIOTP RFC Section 6.2 (BIO1).
         if (biometricAvailable(activity)) {
             showBiometricPrompt(activity)
         }

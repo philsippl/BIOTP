@@ -1,0 +1,28 @@
+# fly.toml app configuration file generated for biotp on 2026-03-24T23:38:40+01:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'biotp'
+primary_region = 'fra'
+
+[build]
+
+[env]
+  MASTER_SECRET = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef'
+  SKIP_ATTESTATION = '1'
+  PUBLIC_BASE_URL = 'https://biotp.fly.dev'
+  ALLOWED_APP_IDS = 'PNXHZNX557.com.ps.humancheck.HumanCheck'
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+
+[[vm]]
+  memory = '1gb'
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 1024

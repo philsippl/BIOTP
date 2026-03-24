@@ -48,12 +48,10 @@ server-ngrok:
     fi
 
     echo "Using PUBLIC_BASE_URL=${public_url}"
-    APP_ATTEST_TEAM_ID="${APP_ATTEST_TEAM_ID:-PNXHZNX557}"
-    APP_ATTEST_BUNDLE_ID="${APP_ATTEST_BUNDLE_ID:-com.ps.humancheck.HumanCheck}"
+    ALLOWED_APP_IDS="${ALLOWED_APP_IDS:-PNXHZNX557.com.ps.humancheck.HumanCheck}"
     cd server
     PUBLIC_BASE_URL="${public_url}" \
-    APP_ATTEST_TEAM_ID="${APP_ATTEST_TEAM_ID}" \
-    APP_ATTEST_BUNDLE_ID="${APP_ATTEST_BUNDLE_ID}" \
+    ALLOWED_APP_IDS="${ALLOWED_APP_IDS}" \
     .venv/bin/python server.py
 
 # ---------------------------------------------------------------------------

@@ -9,7 +9,6 @@ Root CA.
 import base64
 import hashlib
 import hmac
-import os
 import time
 from typing import Optional
 
@@ -124,43 +123,25 @@ def _extract_nonce_from_extension(ext_value: bytes) -> bytes:
     return b""
 
 
-def configured_app_id_hash() -> Optional[bytes]:
-    """Return the expected rpIdHash from environment variables, or None."""
-    team_id = os.environ.get("APP_ATTEST_TEAM_ID", "").strip()
-    bundle_id = os.environ.get("APP_ATTEST_BUNDLE_ID", "").strip()
-    if team_id and bundle_id:
-        return hashlib.sha256(
-            f"{team_id}.{bundle_id}".encode("utf-8")
-        ).digest()
-
-    if team_id or bundle_id:
-        return b""  # misconfigured — partial identity
-
-    return None
-
-
 def _verify_app_id_hash(
     auth_data: bytes,
+    allowed_app_ids: Optional[list[str]] = None,
 ) -> tuple[bool, str, Optional[bytes]]:
-    expected_hash = configured_app_id_hash()
-    if expected_hash is None:
+    if len(auth_data) < 32:
+        return False, "authData too short for rpIdHash", None
+
+    if allowed_app_ids is None:
         return True, "", None
 
-    if not expected_hash:
-        return (
-            False,
-            "APP_ATTEST_TEAM_ID and APP_ATTEST_BUNDLE_ID must both be set",
-            expected_hash,
-        )
-    if len(expected_hash) != 32:
-        return False, "configured app id hash must be 32 bytes", expected_hash
-    if len(auth_data) < 32:
-        return False, "authData too short for rpIdHash", expected_hash
+    if not allowed_app_ids:
+        return False, "allowed_app_ids is empty", None
 
     actual = auth_data[:32]
-    if not hmac.compare_digest(actual, expected_hash):
-        return False, "app id hash verification failed", expected_hash
-    return True, "", expected_hash
+    for app_id in allowed_app_ids:
+        expected = hashlib.sha256(app_id.encode("utf-8")).digest()
+        if hmac.compare_digest(actual, expected):
+            return True, "", expected
+    return False, "app id hash does not match any allowed bundle id", None
 
 
 def _verify_x5c_chain(x5c_certs: list) -> tuple[bool, str, list[dict]]:
@@ -202,6 +183,7 @@ def verify_app_attest(
     expected_client_data_hash: bytes,
     user_public_key: str,
     session_challenge_b64: str,
+    allowed_app_ids: Optional[list[str]] = None,
 ) -> tuple[bool, str, dict]:
     """Verify an Apple App Attest attestation object.
 
@@ -265,13 +247,10 @@ def verify_app_attest(
     details["auth_data_len"] = len(auth_data)
     details["auth_data_rp_id_hash"] = auth_data[:32].hex()
 
-    app_id_hash = configured_app_id_hash()
-    details["app_id_hash_configured"] = bool(app_id_hash)
-    details["app_id_hash_expected"] = (
-        app_id_hash.hex() if app_id_hash else None
-    )
+    details["app_id_hash_configured"] = allowed_app_ids is not None
     details["app_id_hash_actual"] = auth_data[:32].hex()
-    app_id_ok, app_id_reason, _ = _verify_app_id_hash(auth_data)
+    app_id_ok, app_id_reason, matched_hash = _verify_app_id_hash(auth_data, allowed_app_ids)
+    details["app_id_hash_expected"] = matched_hash.hex() if matched_hash else None
     if not app_id_ok:
         details["app_id_hash_verified"] = False
         return _fail(app_id_reason, details)

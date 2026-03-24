@@ -39,6 +39,13 @@ SESSION_TTL = 300  # registration sessions expire after 5 minutes
 
 master = MasterKey(MASTER_SECRET, period=PERIOD)
 
+# Trusted iOS bundle IDs as "TEAMID.BUNDLEID" strings (comma-separated env var).
+# When set, only attestations from these apps are accepted.
+ALLOWED_APP_IDS: list[str] | None = None
+_raw_app_ids = os.environ.get("ALLOWED_APP_IDS", "").strip()
+if _raw_app_ids:
+    ALLOWED_APP_IDS = [s.strip() for s in _raw_app_ids.split(",") if s.strip()]
+
 ICON_COLOR_PALETTE = [
     "#6366f1",
     "#ec4899",
@@ -237,6 +244,9 @@ def register_complete():
             400,
         )
 
+    if user_id in users:
+        return jsonify(error="user_id already registered"), 409
+
     session = registration_sessions.get(session_id)
     if not session:
         return jsonify(error="invalid session"), 404
@@ -303,6 +313,7 @@ def register_complete():
                     expected_client_data_hash=client_hash,
                     user_public_key=public_key,
                     session_challenge_b64=session_challenge,
+                    allowed_app_ids=ALLOWED_APP_IDS,
                 )
             except Exception as exc:
                 if not skip_attest:
@@ -444,6 +455,7 @@ if __name__ == "__main__":
         "Public base URL override: "
         + (os.environ.get("PUBLIC_BASE_URL", "<none>").strip() or "<none>")
     )
+    print(f"Allowed app IDs: {ALLOWED_APP_IDS or '<any (not configured)>'}")
     print(f"Period: {PERIOD}s")
     print("Serving on http://0.0.0.0:8787")
     print()

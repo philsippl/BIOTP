@@ -1,2 +1,0 @@
-../lib/biotp-py
-flask

@@ -3,25 +3,23 @@
 # ---------------------------------------------------------------------------
 
 server-setup:
-    cd server && uv venv .venv
-    cd server && uv pip install --python .venv/bin/python -r requirements.txt
+    cd lib/biotp-ts && npm install && npm run build
+    cd server-ts && npm install && npm run build
 
 server:
-    [ -x server/.venv/bin/python ] || just server-setup
-    cd server && .venv/bin/python server.py
+    [ -d server-ts/dist ] || just server-setup
+    cd server-ts && node dist/server.js
 
 # Run server with attestation checks disabled (for emulator/simulator testing)
 server-dev:
-    [ -x server/.venv/bin/python ] || just server-setup
-    cd server && SKIP_ATTESTATION=1 .venv/bin/python server.py
+    [ -d server-ts/dist ] || just server-setup
+    cd server-ts && ALLOW_SIMULATOR=1 node dist/server.js
 
 server-ngrok:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    if [ ! -x server/.venv/bin/python ]; then
-      just server-setup
-    fi
+    [ -d server-ts/dist ] || just server-setup
 
     if ! command -v ngrok >/dev/null 2>&1; then
       echo "ngrok is not installed or not on PATH"
@@ -49,10 +47,10 @@ server-ngrok:
 
     echo "Using PUBLIC_BASE_URL=${public_url}"
     ALLOWED_APP_IDS="${ALLOWED_APP_IDS:-PNXHZNX557.com.ps.humancheck.HumanCheck}"
-    cd server
+    cd server-ts
     PUBLIC_BASE_URL="${public_url}" \
     ALLOWED_APP_IDS="${ALLOWED_APP_IDS}" \
-    .venv/bin/python server.py
+    node dist/server.js
 
 # ---------------------------------------------------------------------------
 # iOS app
@@ -119,6 +117,9 @@ lib-swift-build:
 
 lib-kotlin-build:
     cd lib/biotp-kotlin && gradle build
+
+lib-ts-build:
+    cd lib/biotp-ts && npm install && npm run build
 
 lib-py-test:
     cd lib/biotp-py && uv run python -c "from biotp import MasterKey; print('biotp-py OK')"

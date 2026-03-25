@@ -74,6 +74,129 @@ AiEAl5mB+GCvKN7EqtLfqBMEkuaFd4053AEi7+QZDCEvm7c=
 
 ANDROID_KEY_ATTESTATION_OID = ObjectIdentifier("1.3.6.1.4.1.11129.2.1.17")
 
+# KeyMaster/KeyMint authorization list tags
+TAG_PURPOSE = 1
+TAG_USER_AUTH_TYPE = 504
+TAG_NO_AUTH_REQUIRED = 503
+TAG_AUTH_TIMEOUT = 505
+TAG_ORIGIN = 702
+
+# userAuthType bitmask values
+AUTH_TYPE_PASSWORD = 0x01
+AUTH_TYPE_FINGERPRINT = 0x02  # biometric
+
+# SecurityLevel
+SECURITY_LEVEL_SOFTWARE = 0
+SECURITY_LEVEL_TEE = 1
+SECURITY_LEVEL_STRONGBOX = 2
+
+
+def _parse_der_element(data: bytes, offset: int = 0) -> tuple:
+    """Parse one DER TLV element. Returns (tag, constructed, cls, value, next_offset)."""
+    tag_byte = data[offset]
+    cls = (tag_byte >> 6) & 0x03
+    constructed = bool(tag_byte & 0x20)
+    tag_num = tag_byte & 0x1F
+    offset += 1
+
+    # High-tag-number form
+    if tag_num == 0x1F:
+        tag_num = 0
+        while True:
+            b = data[offset]
+            offset += 1
+            tag_num = (tag_num << 7) | (b & 0x7F)
+            if not (b & 0x80):
+                break
+
+    # Length
+    len_byte = data[offset]
+    offset += 1
+    if len_byte < 0x80:
+        length = len_byte
+    else:
+        n = len_byte & 0x7F
+        length = int.from_bytes(data[offset:offset + n], "big")
+        offset += n
+
+    value = data[offset:offset + length]
+    return tag_num, constructed, cls, value, offset + length
+
+
+def _parse_der_sequence(data: bytes) -> list:
+    """Parse a DER SEQUENCE into a list of (tag, cls, value) tuples."""
+    elements = []
+    offset = 0
+    while offset < len(data):
+        tag_num, constructed, cls, value, offset = _parse_der_element(data, offset)
+        elements.append((tag_num, constructed, cls, value))
+    return elements
+
+
+def _parse_der_integer(data: bytes) -> int:
+    """Parse a DER INTEGER value."""
+    return int.from_bytes(data, "big", signed=True if data[0] & 0x80 else False)
+
+
+def _parse_authorization_list(seq_data: bytes) -> dict:
+    """Parse a KeyMaster AuthorizationList from DER SEQUENCE content."""
+    result = {}
+    elements = _parse_der_sequence(seq_data)
+    for tag_num, constructed, cls, value in elements:
+        if cls == 2:  # context-specific
+            if constructed and len(value) > 0:
+                # EXPLICIT tag wrapping — parse the inner value
+                inner_tag, _, _, inner_value, _ = _parse_der_element(value, 0)
+                if inner_tag == 2:  # INTEGER
+                    result[tag_num] = _parse_der_integer(inner_value)
+                elif inner_tag == 5:  # NULL
+                    result[tag_num] = True
+                elif inner_tag == 49:  # SET
+                    # SET OF INTEGER (e.g., purpose)
+                    items = _parse_der_sequence(inner_value)
+                    result[tag_num] = [_parse_der_integer(v) for t, _, _, v in items if t == 2]
+                else:
+                    result[tag_num] = inner_value
+            else:
+                result[tag_num] = value
+    return result
+
+
+def parse_key_description(ext_data: bytes) -> dict:
+    """Parse the KeyDescription ASN.1 structure from the attestation extension.
+
+    Returns a dict with attestation metadata including authorization lists.
+    """
+    try:
+        # KeyDescription is a SEQUENCE
+        tag_num, constructed, cls, seq_data, _ = _parse_der_element(ext_data, 0)
+        if tag_num != 16 or not constructed:
+            return {"error": "not a SEQUENCE"}
+
+        elements = _parse_der_sequence(seq_data)
+        if len(elements) < 8:
+            return {"error": f"expected 8 elements, got {len(elements)}"}
+
+        attestation_version = _parse_der_integer(elements[0][3])
+        attestation_security_level = _parse_der_integer(elements[1][3])
+        keymaster_version = _parse_der_integer(elements[2][3])
+        keymaster_security_level = _parse_der_integer(elements[3][3])
+        attestation_challenge = elements[4][3]  # OCTET STRING content
+        software_enforced = _parse_authorization_list(elements[6][3])
+        tee_enforced = _parse_authorization_list(elements[7][3])
+
+        return {
+            "attestation_version": attestation_version,
+            "attestation_security_level": attestation_security_level,
+            "keymaster_version": keymaster_version,
+            "keymaster_security_level": keymaster_security_level,
+            "attestation_challenge": attestation_challenge,
+            "software_enforced": software_enforced,
+            "tee_enforced": tee_enforced,
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
 
 def _load_google_roots():
     roots = []
@@ -198,6 +321,7 @@ def verify_android_attestation(
     cert_chain_b64: list[str],
     expected_challenge: bytes,
     user_public_key_hex: str,
+    require_biometric: bool = True,
 ) -> tuple[bool, str, dict]:
     """Verify an Android KeyStore attestation certificate chain.
 
@@ -266,6 +390,40 @@ def verify_android_attestation(
         details["challenge_binding"] = "challenge_hash_found"
     else:
         return False, "challenge not found in attestation extension", details
+
+    # Parse KeyDescription for authorization details
+    key_desc = parse_key_description(ext_data)
+    if "error" not in key_desc:
+        tee = key_desc.get("tee_enforced", {})
+        sw = key_desc.get("software_enforced", {})
+        user_auth_type_tee = tee.get(TAG_USER_AUTH_TYPE, 0)
+        user_auth_type_sw = sw.get(TAG_USER_AUTH_TYPE, 0)
+        no_auth = tee.get(TAG_NO_AUTH_REQUIRED) or sw.get(TAG_NO_AUTH_REQUIRED)
+        auth_timeout_tee = tee.get(TAG_AUTH_TIMEOUT)
+
+        biometric_in_tee = bool(user_auth_type_tee & AUTH_TYPE_FINGERPRINT) if isinstance(user_auth_type_tee, int) else False
+        biometric_in_sw = bool(user_auth_type_sw & AUTH_TYPE_FINGERPRINT) if isinstance(user_auth_type_sw, int) else False
+
+        sec_level = key_desc.get("attestation_security_level", 0)
+        details["key_protection"] = {
+            "security_level": (
+                "StrongBox" if sec_level == SECURITY_LEVEL_STRONGBOX
+                else "TEE" if sec_level == SECURITY_LEVEL_TEE
+                else "Software"
+            ),
+            "biometric_required_tee": biometric_in_tee,
+            "biometric_required_sw": biometric_in_sw,
+            "no_auth_required": bool(no_auth),
+            "auth_timeout": auth_timeout_tee,
+        }
+
+        if require_biometric:
+            if not biometric_in_tee:
+                return False, "key is not biometrically protected in TEE", details
+    else:
+        details["key_description_parse_error"] = key_desc["error"]
+        if require_biometric:
+            return False, f"could not verify biometric protection: {key_desc['error']}", details
 
     details["valid"] = True
     details["verified_at"] = time.time()

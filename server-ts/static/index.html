@@ -411,6 +411,24 @@ async function refreshUsers() {
     const statusText = attestValid
       ? (attestWarning ? `${platformLabel} attestation accepted (${attestWarning})` : `${platformLabel} attestation verified`)
       : `${platformLabel} attestation not verified`;
+
+    // Key protection badges
+    const kp = u.key_protection || null;
+    const shieldIcon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75m-3-7.036A11.959 11.959 0 0 1 3.598 6 11.99 11.99 0 0 0 3 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285Z"/></svg>';
+    const warnIcon = '<svg class="w-3 h-3" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z"/></svg>';
+    let attestBadge = '';
+    if (kp && kp.biometric_required_tee) {
+      attestBadge = `<span class="inline-flex items-center gap-1 rounded-full bg-green-50 border border-green-200 px-2 py-0.5 text-[10px] font-medium text-green-700">${shieldIcon}Hardware Attested</span>`;
+    } else if (kp && kp.no_auth_required) {
+      attestBadge = `<span class="inline-flex items-center gap-1 rounded-full bg-red-50 border border-red-200 px-2 py-0.5 text-[10px] font-medium text-red-700">${warnIcon}No Auth</span>`;
+    } else if (kp) {
+      attestBadge = '<span class="inline-flex items-center gap-1 rounded-full bg-yellow-50 border border-yellow-200 px-2 py-0.5 text-[10px] font-medium text-yellow-700">SW Auth</span>';
+    } else if (attestValid && platform === 'ios') {
+      attestBadge = `<span class="inline-flex items-center gap-1 rounded-full bg-blue-50 border border-blue-200 px-2 py-0.5 text-[10px] font-medium text-blue-700">${shieldIcon}App Attested</span>`;
+    }
+    const secLevelBadge = kp && kp.security_level
+      ? `<span class="inline-flex items-center rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600">${escapeHtml(String(kp.security_level))}</span>`
+      : '';
     const verifyInputId = `device-verify-input-${index}`;
     const verifyStatusId = `device-verify-status-${index}`;
     const detailsOpen = detailsState[detailsId] ? '' : 'hidden';
@@ -426,7 +444,10 @@ async function refreshUsers() {
                 </div>
                 <div class="flex-1 min-w-0">
                   <p class="text-base font-semibold text-slate-900">${displayName}</p>
-                  <p class="text-xs font-mono text-slate-500 truncate">${u.public_key}</p>
+                  <div class="flex items-center gap-1.5 mt-0.5">
+                    <p class="text-xs font-mono text-slate-500 truncate">${u.public_key}</p>
+                    ${attestBadge}${secLevelBadge}
+                  </div>
                 </div>
                 <svg id="${detailsId}-arrow" class="w-4 h-4 text-slate-500 transition-transform ${arrowRotation}" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="m19 9-7 7-7-7"/>
@@ -470,6 +491,13 @@ async function refreshUsers() {
                 <p class="text-slate-700">Platform: <span class="font-mono text-slate-900">${platform}</span></p>
                 <p class="text-slate-700 mt-1">Verified At: <span class="font-mono text-slate-900">${attestVerified}</span></p>
               </div>
+              ${kp ? `<div class="rounded border border-slate-200 bg-white p-2">
+                <p class="text-[11px] uppercase tracking-wide text-slate-500 mb-1">Key Protection</p>
+                <p class="text-slate-700">Security Level: <span class="font-mono text-slate-900">${escapeHtml(String(kp.security_level || 'Unknown'))}</span></p>
+                <p class="text-slate-700 mt-1">Biometric (TEE): <span class="font-mono ${kp.biometric_required_tee ? 'text-green-700' : 'text-red-600'}">${kp.biometric_required_tee ? 'Yes' : 'No'}</span></p>
+                <p class="text-slate-700 mt-1">No Auth Required: <span class="font-mono ${kp.no_auth_required ? 'text-red-600' : 'text-green-700'}">${kp.no_auth_required ? 'Yes' : 'No'}</span></p>
+                ${kp.auth_timeout != null ? `<p class="text-slate-700 mt-1">Auth Timeout: <span class="font-mono text-slate-900">${kp.auth_timeout}s</span></p>` : ''}
+              </div>` : ''}
               ${renderCertChain(attestDetails)}
               <div class="rounded border border-slate-200 bg-slate-900 p-2">
                 <p class="text-[11px] uppercase tracking-wide text-slate-300">Raw Details</p>

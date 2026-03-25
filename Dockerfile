@@ -1,11 +1,14 @@
-FROM python:3.12-slim
+FROM node:22-slim
 
 WORKDIR /app
 
-COPY lib/biotp-py /app/lib/biotp-py
-COPY server /app/server
+COPY lib/biotp-ts /app/lib/biotp-ts
+COPY server-ts /app/server-ts
 
-RUN pip install --no-cache-dir /app/lib/biotp-py flask
+WORKDIR /app/lib/biotp-ts
+RUN npm install && npm run build
 
-WORKDIR /app/server
-CMD ["python", "server.py"]
+WORKDIR /app/server-ts
+RUN npm install && npm run build
+
+CMD ["node", "dist/server.js"]

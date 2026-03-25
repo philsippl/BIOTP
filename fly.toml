@@ -10,7 +10,7 @@ primary_region = 'fra'
 
 [env]
   MASTER_SECRET = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef'
-  SKIP_ATTESTATION = '1'
+  ALLOW_SIMULATOR = '1'
   PUBLIC_BASE_URL = 'https://biotp.fly.dev'
   ALLOWED_APP_IDS = 'PNXHZNX557.com.ps.humancheck.HumanCheck'
 

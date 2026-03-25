@@ -21,6 +21,10 @@ build/
 local.properties
 *.apk
 
+# Node / TypeScript
+node_modules/
+dist/
+
 # IDE
 .idea/
 *.iml

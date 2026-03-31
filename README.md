@@ -8,6 +8,10 @@ The result is a standard 6-digit OTP that is device-bound, biometric-gated, gene
 
 See [`rfc-biotp.txt`](rfc-biotp.txt) for the full protocol specification.
 
+<p align="center">
+  <img src="biotp.gif" alt="BIOTP demo" width="800" />
+</p>
+
 ## Why BIOTP
 
 The core problem BIOTP solves is **remote biometric liveness**. A server needs to know that a (specific) human is physically present at a specific device.
